@@ -1,0 +1,18 @@
+{
+  "name": "Adhaiyu Ride",
+  "short_name": "Adhaiyu Ride",
+  "description": "Bike & Auto rides for Adhaiyur, Kallakurichi, Ulundurpettai",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#FFCC00",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/placeholder.svg",
+      "sizes": "192x192 512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
