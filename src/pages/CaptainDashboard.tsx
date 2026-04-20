@@ -461,7 +461,8 @@ function DocsForm({ captain, onUpdate }: { captain: Captain; onUpdate: (c: Capta
       toast.error(error.message);
       return;
     }
-    const { error: upErr } = await supabase.from("captains").update({ [field]: path }).eq("id", captain.id);
+    const update: Partial<Captain> = { [field]: path } as Partial<Captain>;
+    const { error: upErr } = await supabase.from("captains").update(update).eq("id", captain.id);
     if (upErr) toast.error(upErr.message);
     else {
       toast.success("Uploaded");
