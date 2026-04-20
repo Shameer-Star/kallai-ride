@@ -14,16 +14,187 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      captains: {
+        Row: {
+          created_at: string
+          current_lat: number | null
+          current_lng: number | null
+          id: string
+          is_online: boolean
+          last_location_at: string | null
+          license_number: string | null
+          license_url: string | null
+          photo_url: string | null
+          rc_url: string | null
+          updated_at: string
+          vehicle_number: string | null
+          vehicle_type: Database["public"]["Enums"]["vehicle_type"]
+          verified: boolean
+        }
+        Insert: {
+          created_at?: string
+          current_lat?: number | null
+          current_lng?: number | null
+          id: string
+          is_online?: boolean
+          last_location_at?: string | null
+          license_number?: string | null
+          license_url?: string | null
+          photo_url?: string | null
+          rc_url?: string | null
+          updated_at?: string
+          vehicle_number?: string | null
+          vehicle_type: Database["public"]["Enums"]["vehicle_type"]
+          verified?: boolean
+        }
+        Update: {
+          created_at?: string
+          current_lat?: number | null
+          current_lng?: number | null
+          id?: string
+          is_online?: boolean
+          last_location_at?: string | null
+          license_number?: string | null
+          license_url?: string | null
+          photo_url?: string | null
+          rc_url?: string | null
+          updated_at?: string
+          vehicle_number?: string | null
+          vehicle_type?: Database["public"]["Enums"]["vehicle_type"]
+          verified?: boolean
+        }
+        Relationships: []
+      }
+      profiles: {
+        Row: {
+          created_at: string
+          full_name: string
+          id: string
+          phone: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          full_name: string
+          id: string
+          phone?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          full_name?: string
+          id?: string
+          phone?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      rides: {
+        Row: {
+          accepted_at: string | null
+          captain_id: string | null
+          completed_at: string | null
+          created_at: string
+          customer_id: string
+          distance_km: number
+          drop_address: string
+          drop_lat: number
+          drop_lng: number
+          fare: number
+          id: string
+          pickup_address: string
+          pickup_lat: number
+          pickup_lng: number
+          rejected_by: string[]
+          started_at: string | null
+          status: Database["public"]["Enums"]["ride_status"]
+          vehicle_type: Database["public"]["Enums"]["vehicle_type"]
+        }
+        Insert: {
+          accepted_at?: string | null
+          captain_id?: string | null
+          completed_at?: string | null
+          created_at?: string
+          customer_id: string
+          distance_km: number
+          drop_address: string
+          drop_lat: number
+          drop_lng: number
+          fare: number
+          id?: string
+          pickup_address: string
+          pickup_lat: number
+          pickup_lng: number
+          rejected_by?: string[]
+          started_at?: string | null
+          status?: Database["public"]["Enums"]["ride_status"]
+          vehicle_type: Database["public"]["Enums"]["vehicle_type"]
+        }
+        Update: {
+          accepted_at?: string | null
+          captain_id?: string | null
+          completed_at?: string | null
+          created_at?: string
+          customer_id?: string
+          distance_km?: number
+          drop_address?: string
+          drop_lat?: number
+          drop_lng?: number
+          fare?: number
+          id?: string
+          pickup_address?: string
+          pickup_lat?: number
+          pickup_lng?: number
+          rejected_by?: string[]
+          started_at?: string | null
+          status?: Database["public"]["Enums"]["ride_status"]
+          vehicle_type?: Database["public"]["Enums"]["vehicle_type"]
+        }
+        Relationships: []
+      }
+      user_roles: {
+        Row: {
+          created_at: string
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      has_role: {
+        Args: {
+          _role: Database["public"]["Enums"]["app_role"]
+          _user_id: string
+        }
+        Returns: boolean
+      }
     }
     Enums: {
-      [_ in never]: never
+      app_role: "customer" | "captain" | "admin"
+      ride_status:
+        | "requested"
+        | "accepted"
+        | "started"
+        | "completed"
+        | "cancelled"
+      vehicle_type: "bike" | "auto"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -150,6 +321,16 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      app_role: ["customer", "captain", "admin"],
+      ride_status: [
+        "requested",
+        "accepted",
+        "started",
+        "completed",
+        "cancelled",
+      ],
+      vehicle_type: ["bike", "auto"],
+    },
   },
 } as const
