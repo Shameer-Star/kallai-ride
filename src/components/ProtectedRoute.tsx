@@ -1,12 +1,9 @@
 import { useAuth } from "@/hooks/useAuth";
-import { Navigate } from "react-router-dom";
-import CustomerHome from "./CustomerHome";
-import CaptainDashboard from "./CaptainDashboard";
+import { Navigate, Outlet } from "react-router-dom";
 import { Loader2 } from "lucide-react";
 
-export default function Index() {
-  const { user, role, loading } = useAuth();
-
+export function ProtectedRoute() {
+  const { user, loading } = useAuth();
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -14,9 +11,6 @@ export default function Index() {
       </div>
     );
   }
-
   if (!user) return <Navigate to="/auth" replace />;
-
-  if (role === "captain") return <CaptainDashboard />;
-  return <CustomerHome />;
+  return <Outlet />;
 }
