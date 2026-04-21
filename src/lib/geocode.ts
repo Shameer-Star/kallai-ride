@@ -7,19 +7,23 @@ export type GeoPlace = {
   lng: number;
 };
 
-// Bias results toward our service area (rural Tamil Nadu)
-const VIEWBOX = "78.5,12.4,79.5,11.4"; // left,top,right,bottom around Kallakurichi region
+// Soft bias toward our service area (rural Tamil Nadu — Kallakurichi region)
+const VIEWBOX = "78.3,12.6,79.7,11.2"; // wider: left,top,right,bottom
 
-export async function searchPlaces(query: string, signal?: AbortSignal): Promise<GeoPlace[]> {
-  if (!query.trim()) return [];
+async function fetchNominatim(
+  q: string,
+  signal?: AbortSignal,
+  bounded = false
+): Promise<GeoPlace[]> {
   const url = new URL("https://nominatim.openstreetmap.org/search");
   url.searchParams.set("format", "json");
-  url.searchParams.set("q", query);
-  url.searchParams.set("limit", "6");
+  url.searchParams.set("q", q);
+  url.searchParams.set("limit", "10");
   url.searchParams.set("countrycodes", "in");
   url.searchParams.set("viewbox", VIEWBOX);
-  url.searchParams.set("bounded", "0");
-  url.searchParams.set("addressdetails", "0");
+  url.searchParams.set("bounded", bounded ? "1" : "0");
+  url.searchParams.set("addressdetails", "1");
+  url.searchParams.set("dedupe", "1");
 
   const res = await fetch(url.toString(), {
     signal,
@@ -32,6 +36,35 @@ export async function searchPlaces(query: string, signal?: AbortSignal): Promise
     lat: parseFloat(d.lat),
     lng: parseFloat(d.lon),
   }));
+}
+
+export async function searchPlaces(query: string, signal?: AbortSignal): Promise<GeoPlace[]> {
+  const q = query.trim();
+  if (!q) return [];
+
+  // 1) Try the full query as-is
+  let results = await fetchNominatim(q, signal);
+  if (results.length > 0) return results.slice(0, 8);
+
+  // 2) Strip common connector words ("near", "next to", "opposite", commas) and retry
+  const cleaned = q
+    .replace(/\b(near|next to|opposite|opp|behind|beside|at)\b/gi, " ")
+    .replace(/[,]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (cleaned !== q && cleaned.length > 0) {
+    results = await fetchNominatim(cleaned, signal);
+    if (results.length > 0) return results.slice(0, 8);
+  }
+
+  // 3) Try just the first significant token + ", Tamil Nadu" (helps small villages)
+  const firstToken = cleaned.split(" ")[0];
+  if (firstToken && firstToken.length >= 3) {
+    results = await fetchNominatim(`${firstToken}, Tamil Nadu`, signal);
+    if (results.length > 0) return results.slice(0, 8);
+  }
+
+  return [];
 }
 
 export async function reverseGeocode(lat: number, lng: number): Promise<string> {
