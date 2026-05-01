@@ -14,54 +14,111 @@ export type Database = {
   }
   public: {
     Tables: {
+      cancellations: {
+        Row: {
+          cancelled_by: string
+          cancelled_by_role: string
+          created_at: string
+          id: string
+          reason: string
+          ride_id: string
+        }
+        Insert: {
+          cancelled_by: string
+          cancelled_by_role: string
+          created_at?: string
+          id?: string
+          reason: string
+          ride_id: string
+        }
+        Update: {
+          cancelled_by?: string
+          cancelled_by_role?: string
+          created_at?: string
+          id?: string
+          reason?: string
+          ride_id?: string
+        }
+        Relationships: []
+      }
       captains: {
         Row: {
+          cancelled_rides: number
+          completed_rides: number
           created_at: string
           current_lat: number | null
           current_lng: number | null
+          daily_cancel_count: number
+          daily_cancel_date: string | null
+          full_name: string | null
           id: string
           is_online: boolean
           last_location_at: string | null
           license_number: string | null
           license_url: string | null
+          phone: string | null
           photo_url: string | null
+          rating: number
           rc_url: string | null
+          total_rides: number
           updated_at: string
+          upi_id: string | null
           vehicle_number: string | null
           vehicle_type: Database["public"]["Enums"]["vehicle_type"]
           verified: boolean
+          warning_level: number
         }
         Insert: {
+          cancelled_rides?: number
+          completed_rides?: number
           created_at?: string
           current_lat?: number | null
           current_lng?: number | null
+          daily_cancel_count?: number
+          daily_cancel_date?: string | null
+          full_name?: string | null
           id: string
           is_online?: boolean
           last_location_at?: string | null
           license_number?: string | null
           license_url?: string | null
+          phone?: string | null
           photo_url?: string | null
+          rating?: number
           rc_url?: string | null
+          total_rides?: number
           updated_at?: string
+          upi_id?: string | null
           vehicle_number?: string | null
           vehicle_type: Database["public"]["Enums"]["vehicle_type"]
           verified?: boolean
+          warning_level?: number
         }
         Update: {
+          cancelled_rides?: number
+          completed_rides?: number
           created_at?: string
           current_lat?: number | null
           current_lng?: number | null
+          daily_cancel_count?: number
+          daily_cancel_date?: string | null
+          full_name?: string | null
           id?: string
           is_online?: boolean
           last_location_at?: string | null
           license_number?: string | null
           license_url?: string | null
+          phone?: string | null
           photo_url?: string | null
+          rating?: number
           rc_url?: string | null
+          total_rides?: number
           updated_at?: string
+          upi_id?: string | null
           vehicle_number?: string | null
           vehicle_type?: Database["public"]["Enums"]["vehicle_type"]
           verified?: boolean
+          warning_level?: number
         }
         Relationships: []
       }
@@ -92,6 +149,8 @@ export type Database = {
       rides: {
         Row: {
           accepted_at: string | null
+          cancellation_reason: string | null
+          cancelled_by: string | null
           captain_id: string | null
           completed_at: string | null
           created_at: string
@@ -102,16 +161,25 @@ export type Database = {
           drop_lng: number
           fare: number
           id: string
+          item_description: string | null
+          otp: string | null
           pickup_address: string
           pickup_lat: number
           pickup_lng: number
+          receiver_name: string | null
+          receiver_phone: string | null
           rejected_by: string[]
+          ride_type: Database["public"]["Enums"]["ride_type"]
+          sender_name: string | null
+          sender_phone: string | null
           started_at: string | null
           status: Database["public"]["Enums"]["ride_status"]
           vehicle_type: Database["public"]["Enums"]["vehicle_type"]
         }
         Insert: {
           accepted_at?: string | null
+          cancellation_reason?: string | null
+          cancelled_by?: string | null
           captain_id?: string | null
           completed_at?: string | null
           created_at?: string
@@ -122,16 +190,25 @@ export type Database = {
           drop_lng: number
           fare: number
           id?: string
+          item_description?: string | null
+          otp?: string | null
           pickup_address: string
           pickup_lat: number
           pickup_lng: number
+          receiver_name?: string | null
+          receiver_phone?: string | null
           rejected_by?: string[]
+          ride_type?: Database["public"]["Enums"]["ride_type"]
+          sender_name?: string | null
+          sender_phone?: string | null
           started_at?: string | null
           status?: Database["public"]["Enums"]["ride_status"]
           vehicle_type: Database["public"]["Enums"]["vehicle_type"]
         }
         Update: {
           accepted_at?: string | null
+          cancellation_reason?: string | null
+          cancelled_by?: string | null
           captain_id?: string | null
           completed_at?: string | null
           created_at?: string
@@ -142,10 +219,17 @@ export type Database = {
           drop_lng?: number
           fare?: number
           id?: string
+          item_description?: string | null
+          otp?: string | null
           pickup_address?: string
           pickup_lat?: number
           pickup_lng?: number
+          receiver_name?: string | null
+          receiver_phone?: string | null
           rejected_by?: string[]
+          ride_type?: Database["public"]["Enums"]["ride_type"]
+          sender_name?: string | null
+          sender_phone?: string | null
           started_at?: string | null
           status?: Database["public"]["Enums"]["ride_status"]
           vehicle_type?: Database["public"]["Enums"]["vehicle_type"]
@@ -194,6 +278,7 @@ export type Database = {
         | "started"
         | "completed"
         | "cancelled"
+      ride_type: "passenger" | "parcel"
       vehicle_type: "bike" | "auto"
     }
     CompositeTypes: {
@@ -330,6 +415,7 @@ export const Constants = {
         "completed",
         "cancelled",
       ],
+      ride_type: ["passenger", "parcel"],
       vehicle_type: ["bike", "auto"],
     },
   },
