@@ -8,10 +8,14 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { calcFare, FARE_CONFIG, haversineKm, MATCH_RADIUS_KM, VehicleType } from "@/lib/fare";
 import { getRouteDistanceKm, reverseGeocode, GeoPlace } from "@/lib/geocode";
-import { Bike, Car, Loader2, MapPin, X, Phone, CheckCircle2 } from "lucide-react";
+import { Bike, Car, Loader2, MapPin, X, CheckCircle2, Package, Users, KeyRound } from "lucide-react";
 import { toast } from "sonner";
+import { CancellationDialog } from "@/components/CancellationDialog";
+import { ParcelForm, ParcelDetails, isParcelValid } from "@/components/ParcelForm";
+import { DriverCard } from "@/components/DriverCard";
 
 type Pt = { lat: number; lng: number };
+type RideType = "passenger" | "parcel";
 type Ride = {
   id: string;
   status: "requested" | "accepted" | "started" | "completed" | "cancelled";
@@ -25,9 +29,18 @@ type Ride = {
   fare: number;
   distance_km: number;
   vehicle_type: VehicleType;
+  ride_type: RideType;
+  otp: string | null;
 };
 
-const DEFAULT_CENTER: Pt = { lat: 11.7401, lng: 78.9609 }; // Kallakurichi area
+const DEFAULT_CENTER: Pt = { lat: 11.7401, lng: 78.9609 };
+const EMPTY_PARCEL: ParcelDetails = {
+  sender_name: "",
+  sender_phone: "",
+  receiver_name: "",
+  receiver_phone: "",
+  item_description: "",
+};
 
 export default function CustomerHome() {
   const { user } = useAuth();
@@ -35,13 +48,15 @@ export default function CustomerHome() {
   const [pickup, setPickup] = useState<{ pt: Pt; address: string } | null>(null);
   const [drop, setDrop] = useState<{ pt: Pt; address: string } | null>(null);
   const [vehicle, setVehicle] = useState<VehicleType>("bike");
+  const [rideType, setRideType] = useState<RideType>("passenger");
+  const [parcel, setParcel] = useState<ParcelDetails>(EMPTY_PARCEL);
   const [distanceKm, setDistanceKm] = useState<number>(0);
   const [route, setRoute] = useState<[number, number][] | null>(null);
   const [nearbyCaptains, setNearbyCaptains] = useState<Pt[]>([]);
   const [activeRide, setActiveRide] = useState<Ride | null>(null);
   const [booking, setBooking] = useState(false);
+  const [cancelOpen, setCancelOpen] = useState(false);
 
-  // Get user GPS once on load
   useEffect(() => {
     if (!navigator.geolocation) return;
     navigator.geolocation.getCurrentPosition(
@@ -56,7 +71,6 @@ export default function CustomerHome() {
     );
   }, []);
 
-  // Compute route + distance whenever pickup/drop change
   useEffect(() => {
     if (!pickup || !drop) {
       setRoute(null);
@@ -71,7 +85,6 @@ export default function CustomerHome() {
         setRoute(r.geometry);
         setDistanceKm(r.distanceKm);
       } else {
-        // fallback haversine
         setRoute(null);
         setDistanceKm(haversineKm(pickup.pt, drop.pt));
       }
@@ -81,7 +94,6 @@ export default function CustomerHome() {
     };
   }, [pickup, drop]);
 
-  // Fetch nearby online captains for the chosen vehicle
   useEffect(() => {
     if (!pickup) return;
     let cancelled = false;
@@ -109,7 +121,6 @@ export default function CustomerHome() {
     };
   }, [pickup, vehicle]);
 
-  // Watch active ride for status updates
   useEffect(() => {
     if (!user) return;
     let cancelled = false;
@@ -139,10 +150,18 @@ export default function CustomerHome() {
     };
   }, [user]);
 
-  const fare = useMemo(() => (distanceKm > 0 ? calcFare(vehicle, distanceKm) : 0), [vehicle, distanceKm]);
+  const fare = useMemo(() => {
+    if (distanceKm <= 0) return 0;
+    const base = calcFare(vehicle, distanceKm);
+    return rideType === "parcel" ? base + 10 : base;
+  }, [vehicle, distanceKm, rideType]);
 
   async function bookRide() {
     if (!user || !pickup || !drop || distanceKm === 0) return;
+    if (rideType === "parcel" && !isParcelValid(parcel)) {
+      toast.error("Please fill all parcel details (10-digit phone numbers)");
+      return;
+    }
     setBooking(true);
     try {
       const { data, error } = await supabase
@@ -156,15 +175,17 @@ export default function CustomerHome() {
           drop_lat: drop.pt.lat,
           drop_lng: drop.pt.lng,
           vehicle_type: vehicle,
+          ride_type: rideType,
           distance_km: Number(distanceKm.toFixed(2)),
           fare,
           status: "requested",
+          ...(rideType === "parcel" ? parcel : {}),
         })
         .select()
         .single();
       if (error) throw error;
       setActiveRide(data as Ride);
-      toast.success("Searching for nearby captain...");
+      toast.success(rideType === "parcel" ? "Searching for captain to pick up parcel..." : "Searching for nearby captain...");
     } catch (err: any) {
       toast.error(err.message ?? "Failed to book ride");
     } finally {
@@ -172,17 +193,25 @@ export default function CustomerHome() {
     }
   }
 
-  async function cancelRide() {
-    if (!activeRide) return;
+  async function confirmCancel(reason: string) {
+    if (!activeRide || !user) return;
     const { error } = await supabase
       .from("rides")
-      .update({ status: "cancelled" })
+      .update({ status: "cancelled", cancellation_reason: reason, cancelled_by: user.id })
       .eq("id", activeRide.id);
-    if (error) toast.error(error.message);
-    else {
-      toast.success("Ride cancelled");
-      setActiveRide(null);
+    if (error) {
+      toast.error(error.message);
+      return;
     }
+    await supabase.from("cancellations").insert({
+      ride_id: activeRide.id,
+      cancelled_by: user.id,
+      cancelled_by_role: "customer",
+      reason,
+    });
+    setCancelOpen(false);
+    setActiveRide(null);
+    toast.success("Ride cancelled");
   }
 
   return (
@@ -197,9 +226,8 @@ export default function CustomerHome() {
           route={route}
         />
 
-        {/* Bottom sheet — booking or active ride */}
         <div className="absolute bottom-0 left-0 right-0 z-10 p-3 pointer-events-none">
-          <Card className="pointer-events-auto p-4 shadow-2xl rounded-2xl border-2">
+          <Card className="pointer-events-auto p-4 shadow-2xl rounded-2xl border-2 max-h-[80vh] overflow-y-auto">
             {!activeRide ? (
               <BookingPanel
                 pickup={pickup}
@@ -208,6 +236,10 @@ export default function CustomerHome() {
                 onDrop={(p) => setDrop({ pt: { lat: p.lat, lng: p.lng }, address: p.display_name })}
                 vehicle={vehicle}
                 setVehicle={setVehicle}
+                rideType={rideType}
+                setRideType={setRideType}
+                parcel={parcel}
+                setParcel={setParcel}
                 distanceKm={distanceKm}
                 fare={fare}
                 nearbyCount={nearbyCaptains.length}
@@ -215,10 +247,17 @@ export default function CustomerHome() {
                 onBook={bookRide}
               />
             ) : (
-              <ActiveRidePanel ride={activeRide} onCancel={cancelRide} />
+              <ActiveRidePanel ride={activeRide} onCancelClick={() => setCancelOpen(true)} />
             )}
           </Card>
         </div>
+
+        <CancellationDialog
+          open={cancelOpen}
+          onOpenChange={setCancelOpen}
+          role="customer"
+          onConfirm={confirmCancel}
+        />
       </div>
     </div>
   );
@@ -231,6 +270,10 @@ function BookingPanel({
   onDrop,
   vehicle,
   setVehicle,
+  rideType,
+  setRideType,
+  parcel,
+  setParcel,
   distanceKm,
   fare,
   nearbyCount,
@@ -243,6 +286,10 @@ function BookingPanel({
   onDrop: (p: GeoPlace) => void;
   vehicle: VehicleType;
   setVehicle: (v: VehicleType) => void;
+  rideType: RideType;
+  setRideType: (v: RideType) => void;
+  parcel: ParcelDetails;
+  setParcel: (p: ParcelDetails) => void;
   distanceKm: number;
   fare: number;
   nearbyCount: number;
@@ -251,27 +298,51 @@ function BookingPanel({
 }) {
   return (
     <div className="space-y-3">
+      {/* Service type tabs */}
+      <div className="grid grid-cols-2 gap-2">
+        <button
+          type="button"
+          onClick={() => setRideType("passenger")}
+          className={`p-2 rounded-xl border-2 text-sm font-semibold transition-all flex items-center justify-center gap-1 ${
+            rideType === "passenger" ? "border-primary bg-primary/10" : "border-border"
+          }`}
+        >
+          <Users className="h-4 w-4" /> Ride
+        </button>
+        <button
+          type="button"
+          onClick={() => setRideType("parcel")}
+          className={`p-2 rounded-xl border-2 text-sm font-semibold transition-all flex items-center justify-center gap-1 ${
+            rideType === "parcel" ? "border-primary bg-primary/10" : "border-border"
+          }`}
+        >
+          <Package className="h-4 w-4" /> Parcel
+        </button>
+      </div>
+
       <div className="space-y-2">
         <PlaceSearch
-          placeholder="Pickup location · ஏறும் இடம்"
+          placeholder={rideType === "parcel" ? "Pickup parcel from" : "Pickup location · ஏறும் இடம்"}
           value={pickup?.address ?? ""}
           onSelect={onPickup}
           iconColor="hsl(48 100% 50%)"
         />
         <PlaceSearch
-          placeholder="Drop location · இறங்கும் இடம்"
+          placeholder={rideType === "parcel" ? "Deliver parcel to" : "Drop location · இறங்கும் இடம்"}
           value={drop?.address ?? ""}
           onSelect={onDrop}
           iconColor="hsl(0 0% 8%)"
         />
       </div>
 
+      {rideType === "parcel" && <ParcelForm value={parcel} onChange={setParcel} />}
+
       {pickup && drop && (
         <>
           <div className="grid grid-cols-2 gap-2">
             {(Object.keys(FARE_CONFIG) as VehicleType[]).map((v) => {
               const cfg = FARE_CONFIG[v];
-              const f = distanceKm > 0 ? calcFare(v, distanceKm) : 0;
+              const f = distanceKm > 0 ? calcFare(v, distanceKm) + (rideType === "parcel" ? 10 : 0) : 0;
               const Icon = v === "bike" ? Bike : Car;
               return (
                 <button
@@ -299,7 +370,11 @@ function BookingPanel({
           </div>
 
           <Button onClick={onBook} disabled={booking || distanceKm === 0} className="w-full h-12 font-bold text-base">
-            {booking ? <Loader2 className="h-4 w-4 animate-spin" /> : `Book ${FARE_CONFIG[vehicle].label} · ₹${fare}`}
+            {booking ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              `${rideType === "parcel" ? "Send Parcel" : `Book ${FARE_CONFIG[vehicle].label}`} · ₹${fare}`
+            )}
           </Button>
         </>
       )}
@@ -313,7 +388,7 @@ function BookingPanel({
   );
 }
 
-function ActiveRidePanel({ ride, onCancel }: { ride: Ride; onCancel: () => void }) {
+function ActiveRidePanel({ ride, onCancelClick }: { ride: Ride; onCancelClick: () => void }) {
   const status = ride.status;
   return (
     <div className="space-y-3">
@@ -322,30 +397,51 @@ function ActiveRidePanel({ ride, onCancel }: { ride: Ride; onCancel: () => void 
           <>
             <Loader2 className="h-6 w-6 animate-spin text-primary" />
             <div>
-              <div className="font-bold">Searching for captain...</div>
+              <div className="font-bold">
+                {ride.ride_type === "parcel" ? "Searching for delivery captain..." : "Searching for captain..."}
+              </div>
               <div className="text-xs text-muted-foreground">கேப்டனைத் தேடுகிறோம்</div>
             </div>
           </>
         )}
         {status === "accepted" && (
-          <>
-            <Phone className="h-6 w-6 text-primary" />
-            <div>
-              <div className="font-bold">Captain on the way!</div>
-              <div className="text-xs text-muted-foreground">கேப்டன் வருகிறார்</div>
+          <div>
+            <div className="font-bold flex items-center gap-1">
+              <CheckCircle2 className="h-5 w-5 text-primary" /> Captain accepted!
             </div>
-          </>
+            <div className="text-xs text-muted-foreground">கேப்டன் வருகிறார்</div>
+          </div>
         )}
         {status === "started" && (
           <>
             <MapPin className="h-6 w-6 text-primary" />
             <div>
-              <div className="font-bold">Ride in progress</div>
-              <div className="text-xs text-muted-foreground">சவாரி நடக்கிறது</div>
+              <div className="font-bold">
+                {ride.ride_type === "parcel" ? "Parcel on the way" : "Ride in progress"}
+              </div>
+              <div className="text-xs text-muted-foreground">
+                {ride.ride_type === "parcel" ? "பார்சல் வருகிறது" : "சவாரி நடக்கிறது"}
+              </div>
             </div>
           </>
         )}
       </div>
+
+      {/* Captain details */}
+      {ride.captain_id && (status === "accepted" || status === "started") && (
+        <DriverCard captainId={ride.captain_id} />
+      )}
+
+      {/* OTP shown to customer when accepted */}
+      {status === "accepted" && ride.otp && (
+        <div className="bg-primary/10 border-2 border-primary/30 rounded-xl p-3 text-center">
+          <div className="flex items-center justify-center gap-1 text-xs text-muted-foreground">
+            <KeyRound className="h-3 w-3" /> Share this OTP with captain
+          </div>
+          <div className="text-3xl font-extrabold tracking-[0.5em] text-primary mt-1">{ride.otp}</div>
+          <div className="text-[10px] text-muted-foreground">OTP-ஐ கேப்டனிடம் சொல்லவும்</div>
+        </div>
+      )}
 
       <div className="bg-muted rounded-lg p-3 space-y-2 text-sm">
         <div className="flex items-start gap-2">
@@ -359,12 +455,15 @@ function ActiveRidePanel({ ride, onCancel }: { ride: Ride; onCancel: () => void 
       </div>
 
       <div className="flex items-center justify-between">
-        <span className="text-sm text-muted-foreground">{ride.distance_km} km · {ride.vehicle_type}</span>
+        <span className="text-sm text-muted-foreground">
+          {ride.distance_km} km · {ride.vehicle_type}
+          {ride.ride_type === "parcel" && " · 📦"}
+        </span>
         <span className="font-bold text-lg">₹{ride.fare}</span>
       </div>
 
       {(status === "requested" || status === "accepted") && (
-        <Button variant="outline" onClick={onCancel} className="w-full">
+        <Button variant="outline" onClick={onCancelClick} className="w-full">
           <X className="h-4 w-4 mr-1" /> Cancel · ரத்து
         </Button>
       )}
