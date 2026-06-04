@@ -284,6 +284,17 @@ export default function CustomerHome() {
           role="customer"
           onConfirm={confirmCancel}
         />
+
+        {rateRide && user && rateRide.captain_id && (
+          <RatingDialog
+            open={!!rateRide}
+            onOpenChange={(v) => !v && setRateRide(null)}
+            rideId={rateRide.id}
+            customerId={user.id}
+            captainId={rateRide.captain_id}
+            fare={rateRide.fare}
+          />
+        )}
       </div>
     </div>
   );
