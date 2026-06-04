@@ -2,7 +2,7 @@ import { Link, useLocation } from "react-router-dom";
 import { Logo } from "./Logo";
 import { Button } from "./ui/button";
 import { useAuth } from "@/hooks/useAuth";
-import { History, LogOut, Home } from "lucide-react";
+import { History, LogOut, Home, Shield } from "lucide-react";
 
 export function AppHeader() {
   const { signOut, role } = useAuth();
@@ -22,6 +22,13 @@ export function AppHeader() {
               <Home className="h-4 w-4" />
             </Button>
           </Link>
+          {role === "admin" && (
+            <Link to="/admin">
+              <Button variant={loc.pathname === "/admin" ? "default" : "ghost"} size="icon">
+                <Shield className="h-4 w-4" />
+              </Button>
+            </Link>
+          )}
           <Link to="/history">
             <Button variant={loc.pathname === "/history" ? "default" : "ghost"} size="icon">
               <History className="h-4 w-4" />

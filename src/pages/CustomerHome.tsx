@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { MapView } from "@/components/MapView";
@@ -13,6 +13,8 @@ import { toast } from "sonner";
 import { CancellationDialog } from "@/components/CancellationDialog";
 import { ParcelForm, ParcelDetails, isParcelValid } from "@/components/ParcelForm";
 import { DriverCard } from "@/components/DriverCard";
+import { RatingDialog } from "@/components/RatingDialog";
+import { FavoriteLocations, FavoriteLocation } from "@/components/FavoriteLocations";
 
 type Pt = { lat: number; lng: number };
 type RideType = "passenger" | "parcel";
@@ -56,6 +58,8 @@ export default function CustomerHome() {
   const [activeRide, setActiveRide] = useState<Ride | null>(null);
   const [booking, setBooking] = useState(false);
   const [cancelOpen, setCancelOpen] = useState(false);
+  const [rateRide, setRateRide] = useState<Ride | null>(null);
+  const lastRideRef = useRef<{ id: string; status: string } | null>(null);
 
   useEffect(() => {
     if (!navigator.geolocation) return;
@@ -133,7 +137,29 @@ export default function CustomerHome() {
         .order("created_at", { ascending: false })
         .limit(1)
         .maybeSingle();
-      if (!cancelled) setActiveRide((data as Ride) ?? null);
+      if (cancelled) return;
+      const next = (data as Ride) ?? null;
+      // Detect completion: had active ride, now gone
+      const prev = lastRideRef.current;
+      if (prev && !next && prev.status !== "completed" && prev.status !== "cancelled") {
+        // Fetch the ride that just ended
+        const { data: ended } = await supabase
+          .from("rides")
+          .select("*")
+          .eq("id", prev.id)
+          .maybeSingle();
+        if (ended && (ended as any).status === "completed" && (ended as any).captain_id) {
+          // Check if already rated
+          const { data: existing } = await supabase
+            .from("ratings")
+            .select("id")
+            .eq("ride_id", prev.id)
+            .maybeSingle();
+          if (!existing) setRateRide(ended as Ride);
+        }
+      }
+      lastRideRef.current = next ? { id: next.id, status: next.status } : null;
+      setActiveRide(next);
     }
     load();
     const channel = supabase
@@ -234,6 +260,9 @@ export default function CustomerHome() {
                 drop={drop}
                 onPickup={(p) => setPickup({ pt: { lat: p.lat, lng: p.lng }, address: p.display_name })}
                 onDrop={(p) => setDrop({ pt: { lat: p.lat, lng: p.lng }, address: p.display_name })}
+                onSelectFavorite={(f) =>
+                  setDrop({ pt: { lat: f.lat, lng: f.lng }, address: f.address })
+                }
                 vehicle={vehicle}
                 setVehicle={setVehicle}
                 rideType={rideType}
@@ -258,6 +287,17 @@ export default function CustomerHome() {
           role="customer"
           onConfirm={confirmCancel}
         />
+
+        {rateRide && user && rateRide.captain_id && (
+          <RatingDialog
+            open={!!rateRide}
+            onOpenChange={(v) => !v && setRateRide(null)}
+            rideId={rateRide.id}
+            customerId={user.id}
+            captainId={rateRide.captain_id}
+            fare={rateRide.fare}
+          />
+        )}
       </div>
     </div>
   );
@@ -268,6 +308,7 @@ function BookingPanel({
   drop,
   onPickup,
   onDrop,
+  onSelectFavorite,
   vehicle,
   setVehicle,
   rideType,
@@ -284,6 +325,7 @@ function BookingPanel({
   drop: { pt: Pt; address: string } | null;
   onPickup: (p: GeoPlace) => void;
   onDrop: (p: GeoPlace) => void;
+  onSelectFavorite: (f: FavoriteLocation) => void;
   vehicle: VehicleType;
   setVehicle: (v: VehicleType) => void;
   rideType: RideType;
@@ -334,6 +376,9 @@ function BookingPanel({
           iconColor="hsl(0 0% 8%)"
         />
       </div>
+
+      <FavoriteLocations currentPickup={pickup} onSelect={onSelectFavorite} />
+
 
       {rideType === "parcel" && <ParcelForm value={parcel} onChange={setParcel} />}
 

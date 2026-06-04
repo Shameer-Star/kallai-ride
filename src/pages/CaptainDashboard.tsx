@@ -25,6 +25,7 @@ import { startAlertLoop, stopAlertLoop } from "@/lib/alertSound";
 import { CancellationDialog } from "@/components/CancellationDialog";
 import { OtpInput } from "@/components/OtpInput";
 import { CustomerCard } from "@/components/CustomerCard";
+import { EarningsBreakdown } from "@/components/EarningsBreakdown";
 
 type Pt = { lat: number; lng: number };
 type Captain = {
@@ -646,22 +647,8 @@ function EarningsPanel({
   const [showDocs, setShowDocs] = useState(false);
   return (
     <div className="space-y-3">
-      <div className="grid grid-cols-2 gap-3">
-        <div className="bg-primary/10 rounded-xl p-3">
-          <div className="flex items-center gap-1 text-xs text-muted-foreground">
-            <IndianRupee className="h-3 w-3" /> Today's Earnings
-          </div>
-          <div className="text-2xl font-extrabold">₹{earnings.total}</div>
-          <div className="text-[10px] text-muted-foreground">இன்றைய வருமானம்</div>
-        </div>
-        <div className="bg-secondary/10 rounded-xl p-3">
-          <div className="flex items-center gap-1 text-xs text-muted-foreground">
-            <CheckCircle2 className="h-3 w-3" /> Today's Rides
-          </div>
-          <div className="text-2xl font-extrabold">{earnings.count}</div>
-          <div className="text-[10px] text-muted-foreground">இன்றைய சவாரிகள்</div>
-        </div>
-      </div>
+      <EarningsBreakdown captainId={captain.id} />
+
 
       {/* Captain stats */}
       <div className="grid grid-cols-3 gap-2">
