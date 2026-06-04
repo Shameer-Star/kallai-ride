@@ -377,6 +377,9 @@ function BookingPanel({
         />
       </div>
 
+      <FavoriteLocations currentPickup={pickup} onSelect={onSelectFavorite} />
+
+
       {rideType === "parcel" && <ParcelForm value={parcel} onChange={setParcel} />}
 
       {pickup && drop && (
