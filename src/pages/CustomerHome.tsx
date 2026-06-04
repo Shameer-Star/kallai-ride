@@ -260,6 +260,9 @@ export default function CustomerHome() {
                 drop={drop}
                 onPickup={(p) => setPickup({ pt: { lat: p.lat, lng: p.lng }, address: p.display_name })}
                 onDrop={(p) => setDrop({ pt: { lat: p.lat, lng: p.lng }, address: p.display_name })}
+                onSelectFavorite={(f) =>
+                  setDrop({ pt: { lat: f.lat, lng: f.lng }, address: f.address })
+                }
                 vehicle={vehicle}
                 setVehicle={setVehicle}
                 rideType={rideType}
@@ -305,6 +308,7 @@ function BookingPanel({
   drop,
   onPickup,
   onDrop,
+  onSelectFavorite,
   vehicle,
   setVehicle,
   rideType,
@@ -321,6 +325,7 @@ function BookingPanel({
   drop: { pt: Pt; address: string } | null;
   onPickup: (p: GeoPlace) => void;
   onDrop: (p: GeoPlace) => void;
+  onSelectFavorite: (f: FavoriteLocation) => void;
   vehicle: VehicleType;
   setVehicle: (v: VehicleType) => void;
   rideType: RideType;
