@@ -122,6 +122,36 @@ export type Database = {
         }
         Relationships: []
       }
+      favorite_locations: {
+        Row: {
+          address: string
+          created_at: string
+          id: string
+          label: string
+          lat: number
+          lng: number
+          user_id: string
+        }
+        Insert: {
+          address: string
+          created_at?: string
+          id?: string
+          label: string
+          lat: number
+          lng: number
+          user_id: string
+        }
+        Update: {
+          address?: string
+          created_at?: string
+          id?: string
+          label?: string
+          lat?: number
+          lng?: number
+          user_id?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           created_at: string
@@ -143,6 +173,36 @@ export type Database = {
           id?: string
           phone?: string | null
           updated_at?: string
+        }
+        Relationships: []
+      }
+      ratings: {
+        Row: {
+          captain_id: string
+          comment: string | null
+          created_at: string
+          customer_id: string
+          id: string
+          ride_id: string
+          stars: number
+        }
+        Insert: {
+          captain_id: string
+          comment?: string | null
+          created_at?: string
+          customer_id: string
+          id?: string
+          ride_id: string
+          stars: number
+        }
+        Update: {
+          captain_id?: string
+          comment?: string | null
+          created_at?: string
+          customer_id?: string
+          id?: string
+          ride_id?: string
+          stars?: number
         }
         Relationships: []
       }
