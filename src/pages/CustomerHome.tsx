@@ -137,7 +137,29 @@ export default function CustomerHome() {
         .order("created_at", { ascending: false })
         .limit(1)
         .maybeSingle();
-      if (!cancelled) setActiveRide((data as Ride) ?? null);
+      if (cancelled) return;
+      const next = (data as Ride) ?? null;
+      // Detect completion: had active ride, now gone
+      const prev = lastRideRef.current;
+      if (prev && !next && prev.status !== "completed" && prev.status !== "cancelled") {
+        // Fetch the ride that just ended
+        const { data: ended } = await supabase
+          .from("rides")
+          .select("*")
+          .eq("id", prev.id)
+          .maybeSingle();
+        if (ended && (ended as any).status === "completed" && (ended as any).captain_id) {
+          // Check if already rated
+          const { data: existing } = await supabase
+            .from("ratings")
+            .select("id")
+            .eq("ride_id", prev.id)
+            .maybeSingle();
+          if (!existing) setRateRide(ended as Ride);
+        }
+      }
+      lastRideRef.current = next ? { id: next.id, status: next.status } : null;
+      setActiveRide(next);
     }
     load();
     const channel = supabase
