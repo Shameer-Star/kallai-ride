@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { MapView } from "@/components/MapView";
@@ -13,6 +13,8 @@ import { toast } from "sonner";
 import { CancellationDialog } from "@/components/CancellationDialog";
 import { ParcelForm, ParcelDetails, isParcelValid } from "@/components/ParcelForm";
 import { DriverCard } from "@/components/DriverCard";
+import { RatingDialog } from "@/components/RatingDialog";
+import { FavoriteLocations, FavoriteLocation } from "@/components/FavoriteLocations";
 
 type Pt = { lat: number; lng: number };
 type RideType = "passenger" | "parcel";
@@ -56,6 +58,8 @@ export default function CustomerHome() {
   const [activeRide, setActiveRide] = useState<Ride | null>(null);
   const [booking, setBooking] = useState(false);
   const [cancelOpen, setCancelOpen] = useState(false);
+  const [rateRide, setRateRide] = useState<Ride | null>(null);
+  const lastRideRef = useRef<{ id: string; status: string } | null>(null);
 
   useEffect(() => {
     if (!navigator.geolocation) return;
