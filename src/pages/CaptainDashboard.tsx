@@ -163,12 +163,16 @@ export default function CaptainDashboard() {
         .order("created_at", { ascending: true });
       if (cancelled || !data) return;
       const myPt: Pt = { lat: captain!.current_lat!, lng: captain!.current_lng! };
-      const candidate = (data as Ride[]).find(
-        (r) =>
-          !r.rejected_by.includes(user!.id) &&
-          haversineKm(myPt, { lat: r.pickup_lat, lng: r.pickup_lng }) <= MATCH_RADIUS_KM
-      );
-      setPendingRequest(candidate ?? null);
+      // Filter to within radius & not rejected, then sort by nearest pickup first
+      const candidates = (data as Ride[])
+        .filter((r) => !r.rejected_by.includes(user!.id))
+        .map((r) => ({
+          ride: r,
+          dist: haversineKm(myPt, { lat: r.pickup_lat, lng: r.pickup_lng }),
+        }))
+        .filter((c) => c.dist <= MATCH_RADIUS_KM)
+        .sort((a, b) => a.dist - b.dist);
+      setPendingRequest(candidates[0]?.ride ?? null);
     }
 
     async function loadEarnings() {
