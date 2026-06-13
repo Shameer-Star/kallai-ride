@@ -304,18 +304,23 @@ export default function CaptainDashboard() {
 
   async function verifyOtpAndStart() {
     if (!activeRide) return;
-    if (otpInput !== activeRide.otp) {
-      toast.error("Incorrect OTP");
+    if (otpInput.length !== 4) {
+      toast.error("Enter the 4-digit OTP");
       return;
     }
-    const { error } = await supabase
-      .from("rides")
-      .update({ status: "started", started_at: new Date().toISOString() })
-      .eq("id", activeRide.id);
-    if (error) toast.error(error.message);
-    else {
+    const { data, error } = await supabase.rpc("verify_ride_otp" as any, {
+      _ride_id: activeRide.id,
+      _otp: otpInput,
+    });
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
+    if (data === true) {
       toast.success("Ride started!");
       setOtpInput("");
+    } else {
+      toast.error("Incorrect OTP");
     }
   }
 
