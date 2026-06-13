@@ -55,6 +55,7 @@ export default function CustomerHome() {
   const [distanceKm, setDistanceKm] = useState<number>(0);
   const [route, setRoute] = useState<[number, number][] | null>(null);
   const [nearbyCaptains, setNearbyCaptains] = useState<Pt[]>([]);
+  const [captainLive, setCaptainLive] = useState<Pt | null>(null);
   const [activeRide, setActiveRide] = useState<Ride | null>(null);
   const [booking, setBooking] = useState(false);
   const [cancelOpen, setCancelOpen] = useState(false);
@@ -176,6 +177,46 @@ export default function CustomerHome() {
     };
   }, [user]);
 
+  // Live captain tracking: subscribe to assigned captain's location while ride is active
+  useEffect(() => {
+    const capId = activeRide?.captain_id;
+    const status = activeRide?.status;
+    if (!capId || (status !== "accepted" && status !== "started")) {
+      setCaptainLive(null);
+      return;
+    }
+    let cancelled = false;
+    async function load() {
+      const { data } = await supabase
+        .from("captains")
+        .select("current_lat, current_lng")
+        .eq("id", capId)
+        .maybeSingle();
+      if (cancelled || !data) return;
+      if (data.current_lat != null && data.current_lng != null) {
+        setCaptainLive({ lat: Number(data.current_lat), lng: Number(data.current_lng) });
+      }
+    }
+    load();
+    const channel = supabase
+      .channel(`captain-live-${capId}`)
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "captains", filter: `id=eq.${capId}` },
+        (payload: any) => {
+          const r = payload.new;
+          if (r?.current_lat != null && r?.current_lng != null) {
+            setCaptainLive({ lat: Number(r.current_lat), lng: Number(r.current_lng) });
+          }
+        }
+      )
+      .subscribe();
+    return () => {
+      cancelled = true;
+      supabase.removeChannel(channel);
+    };
+  }, [activeRide?.captain_id, activeRide?.status]);
+
   const fare = useMemo(() => {
     if (distanceKm <= 0) return 0;
     const base = calcFare(vehicle, distanceKm);
@@ -248,7 +289,13 @@ export default function CustomerHome() {
           center={pickup?.pt ?? center}
           pickup={pickup?.pt}
           drop={drop?.pt}
-          captains={nearbyCaptains}
+          captains={
+            activeRide && captainLive
+              ? [captainLive]
+              : activeRide
+              ? []
+              : nearbyCaptains
+          }
           route={route}
         />
 
@@ -276,7 +323,11 @@ export default function CustomerHome() {
                 onBook={bookRide}
               />
             ) : (
-              <ActiveRidePanel ride={activeRide} onCancelClick={() => setCancelOpen(true)} />
+              <ActiveRidePanel
+                ride={activeRide}
+                captainLive={captainLive}
+                onCancelClick={() => setCancelOpen(true)}
+              />
             )}
           </Card>
         </div>
@@ -433,8 +484,25 @@ function BookingPanel({
   );
 }
 
-function ActiveRidePanel({ ride, onCancelClick }: { ride: Ride; onCancelClick: () => void }) {
+function ActiveRidePanel({
+  ride,
+  captainLive,
+  onCancelClick,
+}: {
+  ride: Ride;
+  captainLive: Pt | null;
+  onCancelClick: () => void;
+}) {
   const status = ride.status;
+  const liveTarget: Pt | null =
+    status === "accepted"
+      ? { lat: ride.pickup_lat, lng: ride.pickup_lng }
+      : status === "started"
+      ? { lat: ride.drop_lat, lng: ride.drop_lng }
+      : null;
+  const liveDistKm = captainLive && liveTarget ? haversineKm(captainLive, liveTarget) : null;
+  const etaMin = liveDistKm != null ? Math.max(1, Math.round((liveDistKm / 25) * 60)) : null;
+
   return (
     <div className="space-y-3">
       <div className="flex items-center gap-3">
@@ -471,6 +539,20 @@ function ActiveRidePanel({ ride, onCancelClick }: { ride: Ride; onCancelClick: (
           </>
         )}
       </div>
+
+      {etaMin != null && (
+        <div className="flex items-center justify-between bg-primary/10 border border-primary/30 rounded-xl p-3">
+          <div className="text-sm">
+            <div className="font-bold">
+              {status === "accepted" ? "Captain arriving in" : "Reaching drop in"}
+            </div>
+            <div className="text-xs text-muted-foreground">
+              {liveDistKm!.toFixed(1)} km away · live tracking
+            </div>
+          </div>
+          <div className="text-2xl font-extrabold text-primary">{etaMin} min</div>
+        </div>
+      )}
 
       {/* Captain details */}
       {ride.captain_id && (status === "accepted" || status === "started") && (
