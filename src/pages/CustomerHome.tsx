@@ -484,8 +484,25 @@ function BookingPanel({
   );
 }
 
-function ActiveRidePanel({ ride, onCancelClick }: { ride: Ride; onCancelClick: () => void }) {
+function ActiveRidePanel({
+  ride,
+  captainLive,
+  onCancelClick,
+}: {
+  ride: Ride;
+  captainLive: Pt | null;
+  onCancelClick: () => void;
+}) {
   const status = ride.status;
+  const liveTarget: Pt | null =
+    status === "accepted"
+      ? { lat: ride.pickup_lat, lng: ride.pickup_lng }
+      : status === "started"
+      ? { lat: ride.drop_lat, lng: ride.drop_lng }
+      : null;
+  const liveDistKm = captainLive && liveTarget ? haversineKm(captainLive, liveTarget) : null;
+  const etaMin = liveDistKm != null ? Math.max(1, Math.round((liveDistKm / 25) * 60)) : null;
+
   return (
     <div className="space-y-3">
       <div className="flex items-center gap-3">
@@ -522,6 +539,20 @@ function ActiveRidePanel({ ride, onCancelClick }: { ride: Ride; onCancelClick: (
           </>
         )}
       </div>
+
+      {etaMin != null && (
+        <div className="flex items-center justify-between bg-primary/10 border border-primary/30 rounded-xl p-3">
+          <div className="text-sm">
+            <div className="font-bold">
+              {status === "accepted" ? "Captain arriving in" : "Reaching drop in"}
+            </div>
+            <div className="text-xs text-muted-foreground">
+              {liveDistKm!.toFixed(1)} km away · live tracking
+            </div>
+          </div>
+          <div className="text-2xl font-extrabold text-primary">{etaMin} min</div>
+        </div>
+      )}
 
       {/* Captain details */}
       {ride.captain_id && (status === "accepted" || status === "started") && (
