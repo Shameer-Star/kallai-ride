@@ -289,7 +289,13 @@ export default function CustomerHome() {
           center={pickup?.pt ?? center}
           pickup={pickup?.pt}
           drop={drop?.pt}
-          captains={nearbyCaptains}
+          captains={
+            activeRide && captainLive
+              ? [captainLive]
+              : activeRide
+              ? []
+              : nearbyCaptains
+          }
           route={route}
         />
 
@@ -317,7 +323,11 @@ export default function CustomerHome() {
                 onBook={bookRide}
               />
             ) : (
-              <ActiveRidePanel ride={activeRide} onCancelClick={() => setCancelOpen(true)} />
+              <ActiveRidePanel
+                ride={activeRide}
+                captainLive={captainLive}
+                onCancelClick={() => setCancelOpen(true)}
+              />
             )}
           </Card>
         </div>
