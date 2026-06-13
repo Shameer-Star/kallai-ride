@@ -319,14 +319,92 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      rides_browseable: {
+        Row: {
+          created_at: string | null
+          distance_km: number | null
+          drop_address: string | null
+          drop_lat: number | null
+          drop_lng: number | null
+          fare: number | null
+          id: string | null
+          item_description: string | null
+          pickup_address: string | null
+          pickup_lat: number | null
+          pickup_lng: number | null
+          rejected_by: string[] | null
+          ride_type: Database["public"]["Enums"]["ride_type"] | null
+          status: Database["public"]["Enums"]["ride_status"] | null
+          vehicle_type: Database["public"]["Enums"]["vehicle_type"] | null
+        }
+        Insert: {
+          created_at?: string | null
+          distance_km?: number | null
+          drop_address?: string | null
+          drop_lat?: number | null
+          drop_lng?: number | null
+          fare?: number | null
+          id?: string | null
+          item_description?: string | null
+          pickup_address?: string | null
+          pickup_lat?: number | null
+          pickup_lng?: number | null
+          rejected_by?: string[] | null
+          ride_type?: Database["public"]["Enums"]["ride_type"] | null
+          status?: Database["public"]["Enums"]["ride_status"] | null
+          vehicle_type?: Database["public"]["Enums"]["vehicle_type"] | null
+        }
+        Update: {
+          created_at?: string | null
+          distance_km?: number | null
+          drop_address?: string | null
+          drop_lat?: number | null
+          drop_lng?: number | null
+          fare?: number | null
+          id?: string | null
+          item_description?: string | null
+          pickup_address?: string | null
+          pickup_lat?: number | null
+          pickup_lng?: number | null
+          rejected_by?: string[] | null
+          ride_type?: Database["public"]["Enums"]["ride_type"] | null
+          status?: Database["public"]["Enums"]["ride_status"] | null
+          vehicle_type?: Database["public"]["Enums"]["vehicle_type"] | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
+      get_my_ride_otp: { Args: { _ride_id: string }; Returns: string }
+      get_nearby_captains: {
+        Args: {
+          _lat: number
+          _lng: number
+          _radius_km?: number
+          _vehicle: Database["public"]["Enums"]["vehicle_type"]
+        }
+        Returns: {
+          current_lat: number
+          current_lng: number
+          id: string
+        }[]
+      }
+      get_ride_parcel_contacts: {
+        Args: { _ride_id: string }
+        Returns: {
+          receiver_phone: string
+          sender_phone: string
+        }[]
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
           _user_id: string
         }
+        Returns: boolean
+      }
+      verify_ride_otp: {
+        Args: { _otp: string; _ride_id: string }
         Returns: boolean
       }
     }

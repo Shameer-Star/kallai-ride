@@ -139,15 +139,18 @@ export default function CaptainDashboard() {
     let cancelled = false;
 
     async function loadActive() {
+      // Note: 'otp' column is no longer granted to authenticated; we never read it client-side.
       const { data } = await supabase
         .from("rides")
-        .select("*")
+        .select(
+          "id, customer_id, captain_id, status, pickup_address, pickup_lat, pickup_lng, drop_address, drop_lat, drop_lng, vehicle_type, ride_type, fare, distance_km, rejected_by, sender_name, receiver_name, item_description"
+        )
         .eq("captain_id", user!.id)
         .in("status", ["accepted", "started"])
         .order("created_at", { ascending: false })
         .limit(1)
         .maybeSingle();
-      if (!cancelled) setActiveRide((data as Ride) ?? null);
+      if (!cancelled) setActiveRide((data as unknown as Ride) ?? null);
     }
 
     async function loadPending() {
@@ -155,19 +158,18 @@ export default function CaptainDashboard() {
         setPendingRequest(null);
         return;
       }
+      // Use the safe view that excludes OTP, sender_phone, receiver_phone, customer_id
       const { data } = await supabase
-        .from("rides")
+        .from("rides_browseable" as any)
         .select("*")
-        .eq("status", "requested")
         .eq("vehicle_type", captain!.vehicle_type)
         .order("created_at", { ascending: true });
       if (cancelled || !data) return;
       const myPt: Pt = { lat: captain!.current_lat!, lng: captain!.current_lng! };
-      // Filter to within radius & not rejected, then sort by nearest pickup first
-      const candidates = (data as Ride[])
-        .filter((r) => !r.rejected_by.includes(user!.id))
+      const candidates = (data as any[])
+        .filter((r) => !(r.rejected_by ?? []).includes(user!.id))
         .map((r) => ({
-          ride: r,
+          ride: r as Ride,
           dist: haversineKm(myPt, { lat: r.pickup_lat, lng: r.pickup_lng }),
         }))
         .filter((c) => c.dist <= MATCH_RADIUS_KM)
@@ -302,18 +304,23 @@ export default function CaptainDashboard() {
 
   async function verifyOtpAndStart() {
     if (!activeRide) return;
-    if (otpInput !== activeRide.otp) {
-      toast.error("Incorrect OTP");
+    if (otpInput.length !== 4) {
+      toast.error("Enter the 4-digit OTP");
       return;
     }
-    const { error } = await supabase
-      .from("rides")
-      .update({ status: "started", started_at: new Date().toISOString() })
-      .eq("id", activeRide.id);
-    if (error) toast.error(error.message);
-    else {
+    const { data, error } = await supabase.rpc("verify_ride_otp" as any, {
+      _ride_id: activeRide.id,
+      _otp: otpInput,
+    });
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
+    if (data === true) {
       toast.success("Ride started!");
       setOtpInput("");
+    } else {
+      toast.error("Incorrect OTP");
     }
   }
 

@@ -103,60 +103,63 @@ export default function CustomerHome() {
     if (!pickup) return;
     let cancelled = false;
     async function load() {
-      const { data } = await supabase
-        .from("captains")
-        .select("current_lat, current_lng, vehicle_type, is_online")
-        .eq("is_online", true)
-        .eq("vehicle_type", vehicle);
+      const { data } = await supabase.rpc("get_nearby_captains" as any, {
+        _vehicle: vehicle,
+        _lat: pickup!.pt.lat,
+        _lng: pickup!.pt.lng,
+        _radius_km: MATCH_RADIUS_KM,
+      });
       if (cancelled || !data) return;
-      const pts: Pt[] = data
-        .filter((c: any) => c.current_lat != null && c.current_lng != null)
-        .map((c: any) => ({ lat: c.current_lat, lng: c.current_lng }))
-        .filter((p) => haversineKm(pickup!.pt, p) <= MATCH_RADIUS_KM);
+      const pts: Pt[] = (data as any[])
+        .filter((c) => c.current_lat != null && c.current_lng != null)
+        .map((c) => ({ lat: Number(c.current_lat), lng: Number(c.current_lng) }));
       setNearbyCaptains(pts);
     }
     load();
-    const channel = supabase
-      .channel("captains-live")
-      .on("postgres_changes", { event: "*", schema: "public", table: "captains" }, load)
-      .subscribe();
+    // Poll every 8s for nearby captains while not on an active ride
+    const id = window.setInterval(load, 8000);
     return () => {
       cancelled = true;
-      supabase.removeChannel(channel);
+      window.clearInterval(id);
     };
   }, [pickup, vehicle]);
 
   useEffect(() => {
     if (!user) return;
     let cancelled = false;
+    const RIDE_COLS =
+      "id, status, captain_id, pickup_address, pickup_lat, pickup_lng, drop_address, drop_lat, drop_lng, fare, distance_km, vehicle_type, ride_type";
     async function load() {
       const { data } = await supabase
         .from("rides")
-        .select("*")
+        .select(RIDE_COLS)
         .eq("customer_id", user!.id)
         .in("status", ["requested", "accepted", "started"])
         .order("created_at", { ascending: false })
         .limit(1)
         .maybeSingle();
       if (cancelled) return;
-      const next = (data as Ride) ?? null;
-      // Detect completion: had active ride, now gone
+      let next = (data as unknown as Ride) ?? null;
+      // Fetch OTP separately via RPC when ride is accepted (otp column not exposed in base table)
+      if (next && next.status === "accepted" && next.captain_id) {
+        const { data: otpData } = await supabase.rpc("get_my_ride_otp" as any, { _ride_id: next.id });
+        if (otpData) next = { ...next, otp: otpData as string };
+      }
+      // Detect completion
       const prev = lastRideRef.current;
       if (prev && !next && prev.status !== "completed" && prev.status !== "cancelled") {
-        // Fetch the ride that just ended
         const { data: ended } = await supabase
           .from("rides")
-          .select("*")
+          .select(RIDE_COLS)
           .eq("id", prev.id)
           .maybeSingle();
         if (ended && (ended as any).status === "completed" && (ended as any).captain_id) {
-          // Check if already rated
           const { data: existing } = await supabase
             .from("ratings")
             .select("id")
             .eq("ride_id", prev.id)
             .maybeSingle();
-          if (!existing) setRateRide(ended as Ride);
+          if (!existing) setRateRide(ended as unknown as Ride);
         }
       }
       lastRideRef.current = next ? { id: next.id, status: next.status } : null;
