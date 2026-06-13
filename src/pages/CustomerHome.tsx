@@ -103,26 +103,24 @@ export default function CustomerHome() {
     if (!pickup) return;
     let cancelled = false;
     async function load() {
-      const { data } = await supabase
-        .from("captains")
-        .select("current_lat, current_lng, vehicle_type, is_online")
-        .eq("is_online", true)
-        .eq("vehicle_type", vehicle);
+      const { data } = await supabase.rpc("get_nearby_captains" as any, {
+        _vehicle: vehicle,
+        _lat: pickup!.pt.lat,
+        _lng: pickup!.pt.lng,
+        _radius_km: MATCH_RADIUS_KM,
+      });
       if (cancelled || !data) return;
-      const pts: Pt[] = data
-        .filter((c: any) => c.current_lat != null && c.current_lng != null)
-        .map((c: any) => ({ lat: c.current_lat, lng: c.current_lng }))
-        .filter((p) => haversineKm(pickup!.pt, p) <= MATCH_RADIUS_KM);
+      const pts: Pt[] = (data as any[])
+        .filter((c) => c.current_lat != null && c.current_lng != null)
+        .map((c) => ({ lat: Number(c.current_lat), lng: Number(c.current_lng) }));
       setNearbyCaptains(pts);
     }
     load();
-    const channel = supabase
-      .channel("captains-live")
-      .on("postgres_changes", { event: "*", schema: "public", table: "captains" }, load)
-      .subscribe();
+    // Poll every 8s for nearby captains while not on an active ride
+    const id = window.setInterval(load, 8000);
     return () => {
       cancelled = true;
-      supabase.removeChannel(channel);
+      window.clearInterval(id);
     };
   }, [pickup, vehicle]);
 
