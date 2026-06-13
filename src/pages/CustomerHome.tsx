@@ -177,6 +177,46 @@ export default function CustomerHome() {
     };
   }, [user]);
 
+  // Live captain tracking: subscribe to assigned captain's location while ride is active
+  useEffect(() => {
+    const capId = activeRide?.captain_id;
+    const status = activeRide?.status;
+    if (!capId || (status !== "accepted" && status !== "started")) {
+      setCaptainLive(null);
+      return;
+    }
+    let cancelled = false;
+    async function load() {
+      const { data } = await supabase
+        .from("captains")
+        .select("current_lat, current_lng")
+        .eq("id", capId)
+        .maybeSingle();
+      if (cancelled || !data) return;
+      if (data.current_lat != null && data.current_lng != null) {
+        setCaptainLive({ lat: Number(data.current_lat), lng: Number(data.current_lng) });
+      }
+    }
+    load();
+    const channel = supabase
+      .channel(`captain-live-${capId}`)
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "captains", filter: `id=eq.${capId}` },
+        (payload: any) => {
+          const r = payload.new;
+          if (r?.current_lat != null && r?.current_lng != null) {
+            setCaptainLive({ lat: Number(r.current_lat), lng: Number(r.current_lng) });
+          }
+        }
+      )
+      .subscribe();
+    return () => {
+      cancelled = true;
+      supabase.removeChannel(channel);
+    };
+  }, [activeRide?.captain_id, activeRide?.status]);
+
   const fare = useMemo(() => {
     if (distanceKm <= 0) return 0;
     const base = calcFare(vehicle, distanceKm);
