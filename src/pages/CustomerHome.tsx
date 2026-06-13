@@ -55,6 +55,7 @@ export default function CustomerHome() {
   const [distanceKm, setDistanceKm] = useState<number>(0);
   const [route, setRoute] = useState<[number, number][] | null>(null);
   const [nearbyCaptains, setNearbyCaptains] = useState<Pt[]>([]);
+  const [captainLive, setCaptainLive] = useState<Pt | null>(null);
   const [activeRide, setActiveRide] = useState<Ride | null>(null);
   const [booking, setBooking] = useState(false);
   const [cancelOpen, setCancelOpen] = useState(false);
