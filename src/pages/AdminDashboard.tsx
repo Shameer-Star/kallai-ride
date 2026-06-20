@@ -46,14 +46,17 @@ export default function AdminDashboard() {
   }, [user, role]);
 
   async function refresh() {
-    const [{ data: rideRows }, { data: capRows }, { data: roleRows }] = await Promise.all([
+    const [{ data: rideRows }, { data: capRows }, { data: roleRows }, { data: profRows }] = await Promise.all([
       supabase.from("rides").select("*").order("created_at", { ascending: false }).limit(100),
       supabase.from("captains").select("*").order("created_at", { ascending: false }),
       supabase.from("user_roles").select("role"),
+      supabase.from("profiles").select("id, full_name, phone"),
     ]);
     const allRides = (rideRows as any[]) ?? [];
     const allCaps = (capRows as any[]) ?? [];
     const allRoles = (roleRows as any[]) ?? [];
+    const profMap: Record<string, any> = {};
+    ((profRows as any[]) ?? []).forEach((p) => (profMap[p.id] = p));
     const completed = allRides.filter((r) => r.status === "completed");
     const revenue = completed.reduce((s, r) => s + Number(r.fare ?? 0), 0);
     const customers = allRoles.filter((r) => r.role === "customer").length;
@@ -68,7 +71,26 @@ export default function AdminDashboard() {
       completionRate,
     });
     setCaptains(allCaps);
+    setProfilesMap(profMap);
     setRides(allRides);
+  }
+
+  async function openDocs(c: any) {
+    setDocCaptain(c);
+    const fields: Record<string, string | null> = {
+      license: c.license_url,
+      rc: c.rc_url,
+      photo: c.photo_url,
+    };
+    const urls: any = {};
+    for (const k of Object.keys(fields)) {
+      const path = fields[k];
+      if (path) {
+        const { data } = await supabase.storage.from("captain-docs").createSignedUrl(path, 600);
+        urls[k] = data?.signedUrl;
+      }
+    }
+    setDocUrls(urls);
   }
 
   async function toggleVerify(captainId: string, verified: boolean) {
