@@ -238,6 +238,49 @@ export default function AdminDashboard() {
             ))}
           </TabsContent>
         </Tabs>
+
+        <Dialog open={!!docCaptain} onOpenChange={(o) => !o && setDocCaptain(null)}>
+          <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>
+                Documents · {profilesMap[docCaptain?.id]?.full_name ?? docCaptain?.full_name ?? "Captain"}
+              </DialogTitle>
+            </DialogHeader>
+            {docCaptain && (
+              <div className="space-y-4 text-sm">
+                <div className="grid grid-cols-2 gap-2">
+                  <div><span className="text-muted-foreground">Phone:</span> {profilesMap[docCaptain.id]?.phone ?? "—"}</div>
+                  <div><span className="text-muted-foreground">Vehicle:</span> {docCaptain.vehicle_type} {docCaptain.vehicle_number ?? ""}</div>
+                  <div><span className="text-muted-foreground">License #:</span> {docCaptain.license_number ?? "—"}</div>
+                  <div><span className="text-muted-foreground">UPI:</span> {docCaptain.upi_id ?? "—"}</div>
+                </div>
+                {(["photo", "license", "rc"] as const).map((k) => (
+                  <div key={k}>
+                    <div className="font-semibold capitalize mb-1">{k}</div>
+                    {docUrls[k] ? (
+                      <a href={docUrls[k]} target="_blank" rel="noreferrer">
+                        <img src={docUrls[k]} alt={k} className="max-h-64 rounded border" />
+                      </a>
+                    ) : (
+                      <div className="text-muted-foreground text-xs">Not uploaded</div>
+                    )}
+                  </div>
+                ))}
+                <div className="flex gap-2 pt-2 border-t">
+                  {docCaptain.verified ? (
+                    <Button variant="outline" onClick={() => { toggleVerify(docCaptain.id, false); setDocCaptain(null); }}>
+                      <XCircle className="h-4 w-4 mr-1" /> Revoke Verification
+                    </Button>
+                  ) : (
+                    <Button onClick={() => { toggleVerify(docCaptain.id, true); setDocCaptain(null); }}>
+                      <CheckCircle2 className="h-4 w-4 mr-1" /> Approve Captain
+                    </Button>
+                  )}
+                </div>
+              </div>
+            )}
+          </DialogContent>
+        </Dialog>
       </main>
     </div>
   );
