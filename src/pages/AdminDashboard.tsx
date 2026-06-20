@@ -161,7 +161,7 @@ export default function AdminDashboard() {
                 <div className="flex items-start justify-between gap-3 flex-wrap">
                   <div className="flex-1 min-w-[200px]">
                     <div className="flex items-center gap-2">
-                      <div className="font-bold">{c.full_name ?? "Unnamed"}</div>
+                      <div className="font-bold">{profilesMap[c.id]?.full_name ?? c.full_name ?? "Unnamed"}</div>
                       {c.verified ? (
                         <Badge className="bg-green-600">Verified</Badge>
                       ) : (
@@ -175,7 +175,7 @@ export default function AdminDashboard() {
                       )}
                     </div>
                     <div className="text-xs text-muted-foreground mt-1 grid grid-cols-2 gap-x-3">
-                      <span>📱 {c.phone ?? "—"}</span>
+                      <span>📱 {profilesMap[c.id]?.phone ?? c.phone ?? "—"}</span>
                       <span>🚗 {c.vehicle_type} · {c.vehicle_number ?? "—"}</span>
                       <span>⭐ {Number(c.rating).toFixed(1)}</span>
                       <span>✅ {c.completed_rides} · ❌ {c.cancelled_rides}</span>
@@ -183,7 +183,10 @@ export default function AdminDashboard() {
                       <span>License: {c.license_number ?? "—"}</span>
                     </div>
                   </div>
-                  <div className="flex gap-2">
+                  <div className="flex gap-2 flex-wrap">
+                    <Button size="sm" variant="secondary" onClick={() => openDocs(c)}>
+                      <FileText className="h-4 w-4 mr-1" /> Docs
+                    </Button>
                     {c.verified ? (
                       <Button size="sm" variant="outline" onClick={() => toggleVerify(c.id, false)} disabled={busy}>
                         <XCircle className="h-4 w-4 mr-1" /> Revoke
