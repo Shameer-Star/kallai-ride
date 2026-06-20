@@ -75,6 +75,51 @@ export default function Auth() {
     }
   }
 
+  async function handleAdminLogin(e: React.FormEvent) {
+    e.preventDefault();
+    if (adminUser.trim() !== "kallairideadmin") {
+      toast.error("Invalid admin username");
+      return;
+    }
+    setSubmitting(true);
+    try {
+      // Try sign in first
+      let { error: signInErr } = await supabase.auth.signInWithPassword({
+        email: ADMIN_EMAIL,
+        password: adminPass,
+      });
+      // If account doesn't exist yet, create it (only works with correct passcode)
+      if (signInErr && /invalid/i.test(signInErr.message)) {
+        if (adminPass !== "ride123") throw new Error("Invalid admin password");
+        const { error: signUpErr } = await supabase.auth.signUp({
+          email: ADMIN_EMAIL,
+          password: adminPass,
+          options: {
+            emailRedirectTo: `${window.location.origin}/`,
+            data: { full_name: "Kallai Ride Admin", role: "customer" },
+          },
+        });
+        if (signUpErr) throw signUpErr;
+        // ensure session
+        await supabase.auth.signInWithPassword({ email: ADMIN_EMAIL, password: adminPass });
+      } else if (signInErr) {
+        throw signInErr;
+      }
+      // Bootstrap admin role server-side (validates passcode + email)
+      const { data: ok, error: rpcErr } = await supabase.rpc("bootstrap_admin", {
+        _passcode: adminPass,
+      });
+      if (rpcErr) throw rpcErr;
+      if (!ok) throw new Error("Admin authorization failed");
+      toast.success("Admin access granted");
+      navigate("/admin", { replace: true });
+    } catch (err: any) {
+      toast.error(err.message ?? "Admin login failed");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
   return (
     <div className="min-h-screen flex flex-col bg-gradient-to-br from-primary/20 via-background to-background">
       <header className="p-4">
