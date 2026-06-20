@@ -135,9 +135,10 @@ export default function Auth() {
           </p>
 
           <Tabs value={mode} onValueChange={(v) => setMode(v as any)} className="mb-4">
-            <TabsList className="grid grid-cols-2 w-full">
+            <TabsList className="grid grid-cols-3 w-full">
               <TabsTrigger value="signin">Sign In</TabsTrigger>
               <TabsTrigger value="signup">Sign Up</TabsTrigger>
+              <TabsTrigger value="admin"><Shield className="h-3.5 w-3.5 mr-1" />Admin</TabsTrigger>
             </TabsList>
 
             <TabsContent value="signin">
