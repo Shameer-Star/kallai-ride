@@ -225,6 +225,26 @@ export default function Auth() {
                 </Button>
               </form>
             </TabsContent>
+
+            <TabsContent value="admin">
+              <form onSubmit={handleAdminLogin} className="space-y-3 mt-4">
+                <div className="rounded-md bg-muted/50 p-2 text-xs text-muted-foreground flex items-start gap-2">
+                  <Shield className="h-3.5 w-3.5 mt-0.5" />
+                  <span>Restricted access. Admin only.</span>
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Admin Username</Label>
+                  <Input required value={adminUser} onChange={(e) => setAdminUser(e.target.value)} placeholder="kallairideadmin" autoComplete="username" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Admin Password</Label>
+                  <Input type="password" required value={adminPass} onChange={(e) => setAdminPass(e.target.value)} autoComplete="current-password" />
+                </div>
+                <Button type="submit" className="w-full h-11 font-bold" disabled={submitting}>
+                  {submitting ? "Verifying..." : "Enter Admin Panel"}
+                </Button>
+              </form>
+            </TabsContent>
           </Tabs>
         </Card>
       </main>
