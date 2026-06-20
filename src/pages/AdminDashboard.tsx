@@ -25,8 +25,11 @@ export default function AdminDashboard() {
   const { user, role, loading } = useAuth();
   const [stats, setStats] = useState({ rides: 0, revenue: 0, captains: 0, customers: 0, completionRate: 0 });
   const [captains, setCaptains] = useState<any[]>([]);
+  const [profilesMap, setProfilesMap] = useState<Record<string, any>>({});
   const [rides, setRides] = useState<any[]>([]);
   const [busy, setBusy] = useState(false);
+  const [docCaptain, setDocCaptain] = useState<any | null>(null);
+  const [docUrls, setDocUrls] = useState<{ license?: string; rc?: string; photo?: string }>({});
 
   useEffect(() => {
     if (!user || role !== "admin") return;
