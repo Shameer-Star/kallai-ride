@@ -9,18 +9,22 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card } from "@/components/ui/card";
 import { Logo } from "@/components/Logo";
 import { toast } from "sonner";
-import { Bike, User } from "lucide-react";
+import { Bike, User, Shield } from "lucide-react";
+
+const ADMIN_EMAIL = "kallairideadmin@kallai.ride";
 
 export default function Auth() {
   const navigate = useNavigate();
   const { user, loading } = useAuth();
-  const [mode, setMode] = useState<"signin" | "signup">("signin");
+  const [mode, setMode] = useState<"signin" | "signup" | "admin">("signin");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [fullName, setFullName] = useState("");
   const [phone, setPhone] = useState("");
   const [role, setRole] = useState<"customer" | "captain">("customer");
   const [vehicleType, setVehicleType] = useState<"bike" | "auto">("bike");
+  const [adminUser, setAdminUser] = useState("");
+  const [adminPass, setAdminPass] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
@@ -71,6 +75,51 @@ export default function Auth() {
     }
   }
 
+  async function handleAdminLogin(e: React.FormEvent) {
+    e.preventDefault();
+    if (adminUser.trim() !== "kallairideadmin") {
+      toast.error("Invalid admin username");
+      return;
+    }
+    setSubmitting(true);
+    try {
+      // Try sign in first
+      let { error: signInErr } = await supabase.auth.signInWithPassword({
+        email: ADMIN_EMAIL,
+        password: adminPass,
+      });
+      // If account doesn't exist yet, create it (only works with correct passcode)
+      if (signInErr && /invalid/i.test(signInErr.message)) {
+        if (adminPass !== "ride123") throw new Error("Invalid admin password");
+        const { error: signUpErr } = await supabase.auth.signUp({
+          email: ADMIN_EMAIL,
+          password: adminPass,
+          options: {
+            emailRedirectTo: `${window.location.origin}/`,
+            data: { full_name: "Kallai Ride Admin", role: "customer" },
+          },
+        });
+        if (signUpErr) throw signUpErr;
+        // ensure session
+        await supabase.auth.signInWithPassword({ email: ADMIN_EMAIL, password: adminPass });
+      } else if (signInErr) {
+        throw signInErr;
+      }
+      // Bootstrap admin role server-side (validates passcode + email)
+      const { data: ok, error: rpcErr } = await supabase.rpc("bootstrap_admin", {
+        _passcode: adminPass,
+      });
+      if (rpcErr) throw rpcErr;
+      if (!ok) throw new Error("Admin authorization failed");
+      toast.success("Admin access granted");
+      navigate("/admin", { replace: true });
+    } catch (err: any) {
+      toast.error(err.message ?? "Admin login failed");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
   return (
     <div className="min-h-screen flex flex-col bg-gradient-to-br from-primary/20 via-background to-background">
       <header className="p-4">
@@ -86,9 +135,10 @@ export default function Auth() {
           </p>
 
           <Tabs value={mode} onValueChange={(v) => setMode(v as any)} className="mb-4">
-            <TabsList className="grid grid-cols-2 w-full">
+            <TabsList className="grid grid-cols-3 w-full">
               <TabsTrigger value="signin">Sign In</TabsTrigger>
               <TabsTrigger value="signup">Sign Up</TabsTrigger>
+              <TabsTrigger value="admin"><Shield className="h-3.5 w-3.5 mr-1" />Admin</TabsTrigger>
             </TabsList>
 
             <TabsContent value="signin">
@@ -172,6 +222,26 @@ export default function Auth() {
                 </div>
                 <Button type="submit" className="w-full h-11 font-bold" disabled={submitting}>
                   {submitting ? "Creating account..." : "Create Account"}
+                </Button>
+              </form>
+            </TabsContent>
+
+            <TabsContent value="admin">
+              <form onSubmit={handleAdminLogin} className="space-y-3 mt-4">
+                <div className="rounded-md bg-muted/50 p-2 text-xs text-muted-foreground flex items-start gap-2">
+                  <Shield className="h-3.5 w-3.5 mt-0.5" />
+                  <span>Restricted access. Admin only.</span>
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Admin Username</Label>
+                  <Input required value={adminUser} onChange={(e) => setAdminUser(e.target.value)} placeholder="kallairideadmin" autoComplete="username" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Admin Password</Label>
+                  <Input type="password" required value={adminPass} onChange={(e) => setAdminPass(e.target.value)} autoComplete="current-password" />
+                </div>
+                <Button type="submit" className="w-full h-11 font-bold" disabled={submitting}>
+                  {submitting ? "Verifying..." : "Enter Admin Panel"}
                 </Button>
               </form>
             </TabsContent>
