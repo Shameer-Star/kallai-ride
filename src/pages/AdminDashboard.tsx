@@ -7,6 +7,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   IndianRupee,
   Users,
@@ -16,6 +17,7 @@ import {
   Loader2,
   Star,
   AlertTriangle,
+  FileText,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -23,8 +25,11 @@ export default function AdminDashboard() {
   const { user, role, loading } = useAuth();
   const [stats, setStats] = useState({ rides: 0, revenue: 0, captains: 0, customers: 0, completionRate: 0 });
   const [captains, setCaptains] = useState<any[]>([]);
+  const [profilesMap, setProfilesMap] = useState<Record<string, any>>({});
   const [rides, setRides] = useState<any[]>([]);
   const [busy, setBusy] = useState(false);
+  const [docCaptain, setDocCaptain] = useState<any | null>(null);
+  const [docUrls, setDocUrls] = useState<{ license?: string; rc?: string; photo?: string }>({});
 
   useEffect(() => {
     if (!user || role !== "admin") return;
@@ -41,14 +46,17 @@ export default function AdminDashboard() {
   }, [user, role]);
 
   async function refresh() {
-    const [{ data: rideRows }, { data: capRows }, { data: roleRows }] = await Promise.all([
+    const [{ data: rideRows }, { data: capRows }, { data: roleRows }, { data: profRows }] = await Promise.all([
       supabase.from("rides").select("*").order("created_at", { ascending: false }).limit(100),
       supabase.from("captains").select("*").order("created_at", { ascending: false }),
       supabase.from("user_roles").select("role"),
+      supabase.from("profiles").select("id, full_name, phone"),
     ]);
     const allRides = (rideRows as any[]) ?? [];
     const allCaps = (capRows as any[]) ?? [];
     const allRoles = (roleRows as any[]) ?? [];
+    const profMap: Record<string, any> = {};
+    ((profRows as any[]) ?? []).forEach((p) => (profMap[p.id] = p));
     const completed = allRides.filter((r) => r.status === "completed");
     const revenue = completed.reduce((s, r) => s + Number(r.fare ?? 0), 0);
     const customers = allRoles.filter((r) => r.role === "customer").length;
@@ -63,7 +71,26 @@ export default function AdminDashboard() {
       completionRate,
     });
     setCaptains(allCaps);
+    setProfilesMap(profMap);
     setRides(allRides);
+  }
+
+  async function openDocs(c: any) {
+    setDocCaptain(c);
+    const fields: Record<string, string | null> = {
+      license: c.license_url,
+      rc: c.rc_url,
+      photo: c.photo_url,
+    };
+    const urls: any = {};
+    for (const k of Object.keys(fields)) {
+      const path = fields[k];
+      if (path) {
+        const { data } = await supabase.storage.from("captain-docs").createSignedUrl(path, 600);
+        urls[k] = data?.signedUrl;
+      }
+    }
+    setDocUrls(urls);
   }
 
   async function toggleVerify(captainId: string, verified: boolean) {
@@ -134,7 +161,7 @@ export default function AdminDashboard() {
                 <div className="flex items-start justify-between gap-3 flex-wrap">
                   <div className="flex-1 min-w-[200px]">
                     <div className="flex items-center gap-2">
-                      <div className="font-bold">{c.full_name ?? "Unnamed"}</div>
+                      <div className="font-bold">{profilesMap[c.id]?.full_name ?? c.full_name ?? "Unnamed"}</div>
                       {c.verified ? (
                         <Badge className="bg-green-600">Verified</Badge>
                       ) : (
@@ -148,7 +175,7 @@ export default function AdminDashboard() {
                       )}
                     </div>
                     <div className="text-xs text-muted-foreground mt-1 grid grid-cols-2 gap-x-3">
-                      <span>📱 {c.phone ?? "—"}</span>
+                      <span>📱 {profilesMap[c.id]?.phone ?? c.phone ?? "—"}</span>
                       <span>🚗 {c.vehicle_type} · {c.vehicle_number ?? "—"}</span>
                       <span>⭐ {Number(c.rating).toFixed(1)}</span>
                       <span>✅ {c.completed_rides} · ❌ {c.cancelled_rides}</span>
@@ -156,7 +183,10 @@ export default function AdminDashboard() {
                       <span>License: {c.license_number ?? "—"}</span>
                     </div>
                   </div>
-                  <div className="flex gap-2">
+                  <div className="flex gap-2 flex-wrap">
+                    <Button size="sm" variant="secondary" onClick={() => openDocs(c)}>
+                      <FileText className="h-4 w-4 mr-1" /> Docs
+                    </Button>
                     {c.verified ? (
                       <Button size="sm" variant="outline" onClick={() => toggleVerify(c.id, false)} disabled={busy}>
                         <XCircle className="h-4 w-4 mr-1" /> Revoke
@@ -208,6 +238,49 @@ export default function AdminDashboard() {
             ))}
           </TabsContent>
         </Tabs>
+
+        <Dialog open={!!docCaptain} onOpenChange={(o) => !o && setDocCaptain(null)}>
+          <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>
+                Documents · {profilesMap[docCaptain?.id]?.full_name ?? docCaptain?.full_name ?? "Captain"}
+              </DialogTitle>
+            </DialogHeader>
+            {docCaptain && (
+              <div className="space-y-4 text-sm">
+                <div className="grid grid-cols-2 gap-2">
+                  <div><span className="text-muted-foreground">Phone:</span> {profilesMap[docCaptain.id]?.phone ?? "—"}</div>
+                  <div><span className="text-muted-foreground">Vehicle:</span> {docCaptain.vehicle_type} {docCaptain.vehicle_number ?? ""}</div>
+                  <div><span className="text-muted-foreground">License #:</span> {docCaptain.license_number ?? "—"}</div>
+                  <div><span className="text-muted-foreground">UPI:</span> {docCaptain.upi_id ?? "—"}</div>
+                </div>
+                {(["photo", "license", "rc"] as const).map((k) => (
+                  <div key={k}>
+                    <div className="font-semibold capitalize mb-1">{k}</div>
+                    {docUrls[k] ? (
+                      <a href={docUrls[k]} target="_blank" rel="noreferrer">
+                        <img src={docUrls[k]} alt={k} className="max-h-64 rounded border" />
+                      </a>
+                    ) : (
+                      <div className="text-muted-foreground text-xs">Not uploaded</div>
+                    )}
+                  </div>
+                ))}
+                <div className="flex gap-2 pt-2 border-t">
+                  {docCaptain.verified ? (
+                    <Button variant="outline" onClick={() => { toggleVerify(docCaptain.id, false); setDocCaptain(null); }}>
+                      <XCircle className="h-4 w-4 mr-1" /> Revoke Verification
+                    </Button>
+                  ) : (
+                    <Button onClick={() => { toggleVerify(docCaptain.id, true); setDocCaptain(null); }}>
+                      <CheckCircle2 className="h-4 w-4 mr-1" /> Approve Captain
+                    </Button>
+                  )}
+                </div>
+              </div>
+            )}
+          </DialogContent>
+        </Dialog>
       </main>
     </div>
   );
