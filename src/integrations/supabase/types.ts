@@ -375,6 +375,7 @@ export type Database = {
       }
     }
     Functions: {
+      bootstrap_admin: { Args: { _passcode: string }; Returns: boolean }
       get_my_ride_otp: { Args: { _ride_id: string }; Returns: string }
       get_nearby_captains: {
         Args: {
