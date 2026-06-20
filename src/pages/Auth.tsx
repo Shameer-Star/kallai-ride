@@ -9,18 +9,22 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card } from "@/components/ui/card";
 import { Logo } from "@/components/Logo";
 import { toast } from "sonner";
-import { Bike, User } from "lucide-react";
+import { Bike, User, Shield } from "lucide-react";
+
+const ADMIN_EMAIL = "kallairideadmin@kallai.ride";
 
 export default function Auth() {
   const navigate = useNavigate();
   const { user, loading } = useAuth();
-  const [mode, setMode] = useState<"signin" | "signup">("signin");
+  const [mode, setMode] = useState<"signin" | "signup" | "admin">("signin");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [fullName, setFullName] = useState("");
   const [phone, setPhone] = useState("");
   const [role, setRole] = useState<"customer" | "captain">("customer");
   const [vehicleType, setVehicleType] = useState<"bike" | "auto">("bike");
+  const [adminUser, setAdminUser] = useState("");
+  const [adminPass, setAdminPass] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
