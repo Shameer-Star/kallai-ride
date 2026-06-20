@@ -7,6 +7,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   IndianRupee,
   Users,
@@ -16,6 +17,7 @@ import {
   Loader2,
   Star,
   AlertTriangle,
+  FileText,
 } from "lucide-react";
 import { toast } from "sonner";
 
