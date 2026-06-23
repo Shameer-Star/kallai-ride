@@ -57,12 +57,28 @@ export async function searchPlaces(query: string, signal?: AbortSignal): Promise
     if (results.length > 0) return results.slice(0, 8);
   }
 
-  // 3) Try just the first significant token + ", Tamil Nadu" (helps small villages)
-  const firstToken = cleaned.split(" ")[0];
-  if (firstToken && firstToken.length >= 3) {
-    results = await fetchNominatim(`${firstToken}, Tamil Nadu`, signal);
+  // 3) Try each significant token individually with ", Tamil Nadu, India" suffix
+  // This is what unlocks small villages like "adhaiyur", "elavanasur", etc.
+  const tokens = cleaned.split(" ").filter((t) => t.length >= 3);
+  for (const token of tokens) {
+    results = await fetchNominatim(`${token}, Tamil Nadu, India`, signal);
     if (results.length > 0) return results.slice(0, 8);
   }
+
+  // 4) Last resort: full query + ", India" (no viewbox bias)
+  try {
+    const url = new URL("https://nominatim.openstreetmap.org/search");
+    url.searchParams.set("format", "json");
+    url.searchParams.set("q", `${cleaned}, India`);
+    url.searchParams.set("limit", "8");
+    url.searchParams.set("countrycodes", "in");
+    url.searchParams.set("addressdetails", "1");
+    const res = await fetch(url.toString(), { signal, headers: { "Accept-Language": "en,ta" } });
+    if (res.ok) {
+      const data = (await res.json()) as Array<{ display_name: string; lat: string; lon: string }>;
+      return data.map((d) => ({ display_name: d.display_name, lat: parseFloat(d.lat), lng: parseFloat(d.lon) }));
+    }
+  } catch {}
 
   return [];
 }
