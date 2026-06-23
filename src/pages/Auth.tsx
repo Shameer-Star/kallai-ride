@@ -81,36 +81,27 @@ export default function Auth() {
       toast.error("Invalid admin username");
       return;
     }
+    if (adminPass !== "ride123") {
+      toast.error("Invalid admin password");
+      return;
+    }
     setSubmitting(true);
     try {
-      // Try sign in first
-      let { error: signInErr } = await supabase.auth.signInWithPassword({
+      // Ensure admin auth user exists & password is set (service-role on server)
+      const { data: bootData, error: bootErr } = await supabase.functions.invoke(
+        "admin-bootstrap",
+        { body: { passcode: adminPass } }
+      );
+      if (bootErr) throw bootErr;
+      if (!bootData?.ok) throw new Error(bootData?.error ?? "Admin bootstrap failed");
+
+      // Now sign in normally
+      const { error: signInErr } = await supabase.auth.signInWithPassword({
         email: ADMIN_EMAIL,
         password: adminPass,
       });
-      // If account doesn't exist yet, create it (only works with correct passcode)
-      if (signInErr && /invalid/i.test(signInErr.message)) {
-        if (adminPass !== "ride123") throw new Error("Invalid admin password");
-        const { error: signUpErr } = await supabase.auth.signUp({
-          email: ADMIN_EMAIL,
-          password: adminPass,
-          options: {
-            emailRedirectTo: `${window.location.origin}/`,
-            data: { full_name: "Kallai Ride Admin", role: "customer" },
-          },
-        });
-        if (signUpErr) throw signUpErr;
-        // ensure session
-        await supabase.auth.signInWithPassword({ email: ADMIN_EMAIL, password: adminPass });
-      } else if (signInErr) {
-        throw signInErr;
-      }
-      // Bootstrap admin role server-side (validates passcode + email)
-      const { data: ok, error: rpcErr } = await supabase.rpc("bootstrap_admin", {
-        _passcode: adminPass,
-      });
-      if (rpcErr) throw rpcErr;
-      if (!ok) throw new Error("Admin authorization failed");
+      if (signInErr) throw signInErr;
+
       toast.success("Admin access granted");
       navigate("/admin", { replace: true });
     } catch (err: any) {
