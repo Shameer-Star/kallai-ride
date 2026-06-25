@@ -88,12 +88,16 @@ export default function Auth() {
     setSubmitting(true);
     try {
       // Ensure admin auth user exists & password is set (service-role on server)
-      const { data: bootData, error: bootErr } = await supabase.functions.invoke(
-        "admin-bootstrap",
-        { body: { passcode: adminPass } }
-      );
-      if (bootErr) throw bootErr;
-      if (!bootData?.ok) throw new Error(bootData?.error ?? "Admin bootstrap failed");
+      try {
+        const { data: bootData, error: bootErr } = await supabase.functions.invoke(
+          "admin-bootstrap",
+          { body: { passcode: adminPass } }
+        );
+        if (bootErr) console.warn("Admin bootstrap edge function warning:", bootErr);
+        if (bootData && !bootData.ok) console.warn("Admin bootstrap warning:", bootData.error);
+      } catch (e) {
+        console.warn("Could not invoke admin-bootstrap edge function, trying direct sign in:", e);
+      }
 
       // Now sign in normally
       const { error: signInErr } = await supabase.auth.signInWithPassword({
