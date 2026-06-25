@@ -172,7 +172,6 @@ export default function CaptainDashboard() {
           ride: r as Ride,
           dist: haversineKm(myPt, { lat: r.pickup_lat, lng: r.pickup_lng }),
         }))
-        .filter((c) => c.dist <= MATCH_RADIUS_KM)
         .sort((a, b) => a.dist - b.dist);
       setPendingRequest(candidates[0]?.ride ?? null);
     }
