@@ -26,6 +26,7 @@ import { CancellationDialog } from "@/components/CancellationDialog";
 import { OtpInput } from "@/components/OtpInput";
 import { CustomerCard } from "@/components/CustomerCard";
 import { EarningsBreakdown } from "@/components/EarningsBreakdown";
+import { LoadingSpinner } from "@/components/LoadingSpinner";
 
 type Pt = { lat: number; lng: number };
 type Captain = {
@@ -357,12 +358,7 @@ export default function CaptainDashboard() {
   }
 
   if (!captain) {
-    return (
-      <div className="flex flex-col h-screen">
-        <AppHeader />
-        <div className="flex-1 flex items-center justify-center">Loading...</div>
-      </div>
-    );
+    return <LoadingSpinner message="Loading Dashboard" messageTa="டாஷ்போர்டு ஏற்றப்படுகிறது..." />;
   }
 
   // Cancellation warning text
