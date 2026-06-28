@@ -38,13 +38,68 @@ async function fetchNominatim(
   }));
 }
 
+export const LOCAL_PLACES: GeoPlace[] = [
+  {
+    display_name: "Adhaiyur, Kallakurichi, Tamil Nadu, India",
+    lat: 11.7645,
+    lng: 78.9812,
+  },
+  {
+    display_name: "Rishivandiyam, Kallakurichi, Tamil Nadu, India",
+    lat: 11.8153,
+    lng: 79.1028,
+  },
+  {
+    display_name: "Thiyagadurugam, Kallakurichi, Tamil Nadu, India",
+    lat: 11.7454,
+    lng: 79.0838,
+  },
+  {
+    display_name: "Eraiyur, Kallakurichi, Tamil Nadu, India",
+    lat: 11.6441,
+    lng: 79.0305,
+  },
+  {
+    display_name: "Ulundurpettai, Kallakurichi, Tamil Nadu, India",
+    lat: 11.6917,
+    lng: 79.2902,
+  },
+  {
+    display_name: "Kallakurichi, Tamil Nadu, India",
+    lat: 11.7383,
+    lng: 78.9639,
+  },
+];
+
 export async function searchPlaces(query: string, signal?: AbortSignal): Promise<GeoPlace[]> {
   const q = query.trim();
   if (!q) return [];
 
+  // Match local static database first
+  const queryLower = q.toLowerCase();
+  const matchedLocal = LOCAL_PLACES.filter((p) => {
+    const name = p.display_name.split(",")[0].toLowerCase();
+    return name.includes(queryLower) || queryLower.includes(name);
+  });
+
   // 1) Try the full query as-is
-  let results = await fetchNominatim(q, signal);
-  if (results.length > 0) return results.slice(0, 8);
+  let results: GeoPlace[] = [];
+  try {
+    results = await fetchNominatim(q, signal);
+  } catch {
+    // Ignore fetch failures
+  }
+  
+  // Combine results with local matches, keeping local matches at the top and deduplicating
+  let combined = [...matchedLocal, ...results];
+  const seen = new Set<string>();
+  combined = combined.filter((c) => {
+    if (seen.has(c.display_name)) return false;
+    seen.add(c.display_name);
+    return true;
+  });
+
+  if (combined.length > 0) return combined.slice(0, 8);
 
   // 2) Strip common connector words ("near", "next to", "opposite", commas) and retry
   const cleaned = q

@@ -77,7 +77,7 @@ type Ride = {
 };
 
 const DEFAULT_CENTER: Pt = { lat: 11.7401, lng: 78.9609 };
-const ALERT_TIMEOUT_SEC = 20;
+const ALERT_TIMEOUT_SEC = 60;
 
 export default function CaptainDashboard() {
   const { user } = useAuth();
@@ -88,7 +88,7 @@ export default function CaptainDashboard() {
   const [todayEarnings, setTodayEarnings] = useState({ count: 0, total: 0 });
   const [otpInput, setOtpInput] = useState("");
   const [cancelOpen, setCancelOpen] = useState(false);
-  const lastAlertedId = useRef<string | null>(null);
+  const lastAlertedKey = useRef<string | null>(null);
 
   // Load captain row (or create)
   useEffect(() => {
@@ -219,14 +219,15 @@ export default function CaptainDashboard() {
     };
   }, [user, captain]);
 
-  // Play alert sound + 20s auto-reject when a new request arrives
+  // Play alert sound + 60s auto-reject when a new request arrives
   useEffect(() => {
     if (!pendingRequest || activeRide) {
       stopAlertLoop();
       return;
     }
-    if (lastAlertedId.current === pendingRequest.id) return;
-    lastAlertedId.current = pendingRequest.id;
+    const currentKey = `${pendingRequest.id}-${pendingRequest.fare}`;
+    if (lastAlertedKey.current === currentKey) return;
+    lastAlertedKey.current = currentKey;
     startAlertLoop();
     const timeout = window.setTimeout(() => {
       // auto-skip after timeout
@@ -237,7 +238,7 @@ export default function CaptainDashboard() {
       stopAlertLoop();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pendingRequest?.id, activeRide?.id]);
+  }, [pendingRequest?.id, pendingRequest?.fare, activeRide?.id]);
 
   async function toggleOnline(next: boolean) {
     if (!user || !captain) return;

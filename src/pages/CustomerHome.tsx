@@ -7,7 +7,7 @@ import { AppHeader } from "@/components/AppHeader";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { calcFare, FARE_CONFIG, haversineKm, MATCH_RADIUS_KM, VehicleType } from "@/lib/fare";
-import { getRouteDistanceKm, reverseGeocode, GeoPlace } from "@/lib/geocode";
+import { getRouteDistanceKm, reverseGeocode, GeoPlace, LOCAL_PLACES } from "@/lib/geocode";
 import { Bike, Car, Loader2, MapPin, X, CheckCircle2, Package, Users, KeyRound } from "lucide-react";
 import { toast } from "sonner";
 import { CancellationDialog } from "@/components/CancellationDialog";
@@ -263,6 +263,53 @@ export default function CustomerHome() {
     }
   }
 
+  async function increaseFare(increment: number) {
+    if (!activeRide) return;
+    const newFare = Number(activeRide.fare) + increment;
+    
+    const { error: updateError } = await supabase
+      .from("rides")
+      .update({
+        fare: newFare,
+        rejected_by: [] // Reset rejected_by to allow skipped captains to see it again
+      })
+      .eq("id", activeRide.id);
+
+    if (updateError) {
+      toast.error(updateError.message);
+      return;
+    }
+
+    try {
+      const { data: captainsData } = await supabase.rpc("get_nearby_captains" as any, {
+        _vehicle: activeRide.vehicle_type,
+        _lat: activeRide.pickup_lat,
+        _lng: activeRide.pickup_lng,
+        _radius_km: 5.0,
+      });
+
+      if (captainsData && Array.isArray(captainsData)) {
+        const notifs = captainsData.map((cap: any) => ({
+          user_id: cap.id,
+          title: "Fare Increased! ₹" + newFare,
+          body: `The ride request fare near your location has been increased to ₹${newFare}.`,
+          type: "fare_increase",
+        }));
+        if (notifs.length > 0) {
+          await supabase.from("notifications").insert(notifs);
+        }
+      }
+    } catch (err) {
+      console.error("Failed to notify captains of fare increase:", err);
+    }
+
+    setActiveRide({
+      ...activeRide,
+      fare: newFare,
+    });
+    toast.success(`Fare increased by ₹${increment}! Captains notified.`);
+  }
+
   async function confirmCancel(reason: string) {
     if (!activeRide || !user) return;
     const { error } = await supabase
@@ -330,6 +377,7 @@ export default function CustomerHome() {
                 ride={activeRide}
                 captainLive={captainLive}
                 onCancelClick={() => setCancelOpen(true)}
+                onIncreaseFare={increaseFare}
               />
             )}
           </Card>
@@ -433,6 +481,51 @@ function BookingPanel({
 
       <FavoriteLocations currentPickup={pickup} onSelect={onSelectFavorite} />
 
+      {/* Quick locations */}
+      <div className="space-y-1.5 bg-muted/40 p-2.5 rounded-xl border border-dashed text-xs">
+        <div className="font-semibold text-muted-foreground flex items-center gap-1 mb-1">
+          <span>Quick Locations · விரைவு இடங்கள்:</span>
+        </div>
+        
+        <div className="space-y-1">
+          <div className="text-[10px] text-muted-foreground font-medium">Pickup (ஏறும் இடம்):</div>
+          <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-none">
+            {LOCAL_PLACES.map((p) => {
+              const name = p.display_name.split(",")[0];
+              return (
+                <button
+                  key={`quick-pickup-${name}`}
+                  type="button"
+                  onClick={() => onPickup(p)}
+                  className="shrink-0 text-[10px] bg-card hover:bg-primary hover:text-primary-foreground border px-2.5 py-1 rounded-full transition-all font-medium"
+                >
+                  {name}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="space-y-1 mt-1">
+          <div className="text-[10px] text-muted-foreground font-medium">Drop (இறங்கும் இடம்):</div>
+          <div className="flex gap-1 overflow-x-auto pb-1 scrollbar-none">
+            {LOCAL_PLACES.map((p) => {
+              const name = p.display_name.split(",")[0];
+              return (
+                <button
+                  key={`quick-drop-${name}`}
+                  type="button"
+                  onClick={() => onDrop(p)}
+                  className="shrink-0 text-[10px] bg-card hover:bg-primary hover:text-primary-foreground border px-2.5 py-1 rounded-full transition-all font-medium"
+                >
+                  {name}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
 
       {rideType === "parcel" && <ParcelForm value={parcel} onChange={setParcel} />}
 
@@ -491,10 +584,12 @@ function ActiveRidePanel({
   ride,
   captainLive,
   onCancelClick,
+  onIncreaseFare,
 }: {
   ride: Ride;
   captainLive: Pt | null;
   onCancelClick: () => void;
+  onIncreaseFare?: (amount: number) => void;
 }) {
   const status = ride.status;
   const liveTarget: Pt | null =
@@ -591,6 +686,27 @@ function ActiveRidePanel({
         </span>
         <span className="font-bold text-lg">₹{ride.fare}</span>
       </div>
+
+      {status === "requested" && (
+        <div className="bg-primary/5 border border-primary/20 rounded-xl p-3 space-y-2">
+          <div className="text-xs font-bold text-center text-primary flex flex-col gap-0.5">
+            <span>Increase fare to find captain faster:</span>
+            <span className="text-[10px] font-normal text-muted-foreground">(ஆஃபர் தொகையை உயர்த்தவும்)</span>
+          </div>
+          <div className="grid grid-cols-5 gap-1">
+            {[10, 20, 30, 40, 50].map((inc) => (
+              <button
+                key={inc}
+                type="button"
+                onClick={() => onIncreaseFare?.(inc)}
+                className="bg-primary text-primary-foreground hover:bg-primary/95 py-2 px-1 rounded-lg text-xs font-bold transition-all shadow-sm active:scale-95"
+              >
+                +₹{inc}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       {(status === "requested" || status === "accepted") && (
         <Button variant="outline" onClick={onCancelClick} className="w-full">
