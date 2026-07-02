@@ -47,6 +47,12 @@ export const LOCAL_PLACES: GeoPlace[] = [
     keywords: ["adhaiyur", "adaiyur", "அடையூர்"]
   },
   {
+    display_name: "Adhaiyur (near Rishivandiyam), Kallakurichi, Tamil Nadu, India",
+    lat: 11.7645,
+    lng: 78.9812,
+    keywords: ["adhaiyur near rishivandiyam", "adhaiyur near rishivndiyam", "ரிஷிவந்தியம் அருகில் அடையூர்"]
+  },
+  {
     display_name: "Rishivandiyam, Kallakurichi, Tamil Nadu, India",
     lat: 11.8153,
     lng: 79.1028,
