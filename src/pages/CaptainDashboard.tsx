@@ -209,6 +209,17 @@ export default function CaptainDashboard() {
       })
       .on(
         "postgres_changes",
+        { event: "INSERT", schema: "public", table: "notifications", filter: `user_id=eq.${user.id}` },
+        (payload: any) => {
+          console.log("New real-time notification:", payload.new);
+          toast.success(payload.new.title + ": " + payload.new.body);
+          loadActive();
+          loadPending();
+          loadEarnings();
+        }
+      )
+      .on(
+        "postgres_changes",
         { event: "UPDATE", schema: "public", table: "captains", filter: `id=eq.${user.id}` },
         reloadCaptain
       )

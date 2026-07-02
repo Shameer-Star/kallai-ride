@@ -80,9 +80,11 @@ export function MapView({
       {captains.map((c, i) => (
         <Marker key={i} position={[c.lat, c.lng]} icon={captainIcon} />
       ))}
-      {route && route.length > 1 && (
+      {route && route.length > 1 ? (
         <Polyline positions={route} pathOptions={{ color: "hsl(48, 100%, 45%)", weight: 5, opacity: 0.85 }} />
-      )}
+      ) : pickup && drop ? (
+        <Polyline positions={[[pickup.lat, pickup.lng], [drop.lat, drop.lng]]} pathOptions={{ color: "hsl(48, 100%, 45%)", weight: 5, opacity: 0.85, dashArray: "5, 10" }} />
+      ) : null}
       <FitBounds points={fitPoints} />
     </MapContainer>
   );

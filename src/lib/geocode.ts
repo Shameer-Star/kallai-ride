@@ -5,6 +5,7 @@ export type GeoPlace = {
   display_name: string;
   lat: number;
   lng: number;
+  keywords?: string[];
 };
 
 // Soft bias toward our service area (rural Tamil Nadu — Kallakurichi region)
@@ -43,31 +44,37 @@ export const LOCAL_PLACES: GeoPlace[] = [
     display_name: "Adhaiyur, Kallakurichi, Tamil Nadu, India",
     lat: 11.7645,
     lng: 78.9812,
+    keywords: ["adhaiyur", "adaiyur", "அடையூர்"]
   },
   {
     display_name: "Rishivandiyam, Kallakurichi, Tamil Nadu, India",
     lat: 11.8153,
     lng: 79.1028,
+    keywords: ["rishivandiyam", "rishivndiyam", "rishivandhiyam", "ரிஷிவந்தியம்"]
   },
   {
     display_name: "Thiyagadurugam, Kallakurichi, Tamil Nadu, India",
     lat: 11.7454,
     lng: 79.0838,
+    keywords: ["thiyagadurugam", "thyagadurugam", "தியாகதுருகம்"]
   },
   {
     display_name: "Eraiyur, Kallakurichi, Tamil Nadu, India",
     lat: 11.6441,
     lng: 79.0305,
+    keywords: ["eraiyur", "erayur", "இறையூர்"]
   },
   {
     display_name: "Ulundurpettai, Kallakurichi, Tamil Nadu, India",
     lat: 11.6917,
     lng: 79.2902,
+    keywords: ["ulundurpettai", "ulundurpet", "உளுந்தூர்ப்பேட்டை"]
   },
   {
     display_name: "Kallakurichi, Tamil Nadu, India",
     lat: 11.7383,
     lng: 78.9639,
+    keywords: ["kallakurichi", "kallai", "கள்ளக்குறிச்சி"]
   },
 ];
 
@@ -79,7 +86,10 @@ export async function searchPlaces(query: string, signal?: AbortSignal): Promise
   const queryLower = q.toLowerCase();
   const matchedLocal = LOCAL_PLACES.filter((p) => {
     const name = p.display_name.split(",")[0].toLowerCase();
-    return name.includes(queryLower) || queryLower.includes(name);
+    const matchesKeyword = p.keywords?.some((kw) => 
+      kw.includes(queryLower) || queryLower.includes(kw)
+    );
+    return name.includes(queryLower) || queryLower.includes(name) || matchesKeyword;
   });
 
   // 1) Try the full query as-is
