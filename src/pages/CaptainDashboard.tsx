@@ -253,59 +253,56 @@ export default function CaptainDashboard() {
 
   async function toggleOnline(next: boolean) {
     if (!user || !captain) return;
-    if (next && !navigator.geolocation) {
-      toast.error("Location not available");
-      return;
-    }
     if (next) {
-      navigator.geolocation.getCurrentPosition(
-        async (pos) => {
-          const { error } = await supabase
-            .from("captains")
-            .update({
-              is_online: true,
-              current_lat: pos.coords.latitude,
-              current_lng: pos.coords.longitude,
-              last_location_at: new Date().toISOString(),
-            })
-            .eq("id", user.id);
-          if (error) toast.error(error.message);
-          else {
-            setCaptain({
-              ...captain,
-              is_online: true,
-              current_lat: pos.coords.latitude,
-              current_lng: pos.coords.longitude,
-            });
-            toast.success("You're online!");
-          }
-        },
-        async (err) => {
-          const fallbackLat = captain.current_lat ?? DEFAULT_CENTER.lat;
-          const fallbackLng = captain.current_lng ?? DEFAULT_CENTER.lng;
-          toast.warning("Geolocation failed: " + err.message + ". Using fallback location.");
-          
-          const { error } = await supabase
-            .from("captains")
-            .update({
-              is_online: true,
-              current_lat: fallbackLat,
-              current_lng: fallbackLng,
-              last_location_at: new Date().toISOString(),
-            })
-            .eq("id", user.id);
-          if (error) toast.error(error.message);
-          else {
-            setCaptain({
-              ...captain,
-              is_online: true,
-              current_lat: fallbackLat,
-              current_lng: fallbackLng,
-            });
-            toast.success("You're online (Fallback location used)!");
-          }
-        }
-      );
+      // Go online immediately with fallback/last-known location to prevent UI freeze/lag
+      const fallbackLat = captain.current_lat ?? DEFAULT_CENTER.lat;
+      const fallbackLng = captain.current_lng ?? DEFAULT_CENTER.lng;
+      
+      const { error } = await supabase
+        .from("captains")
+        .update({
+          is_online: true,
+          current_lat: fallbackLat,
+          current_lng: fallbackLng,
+          last_location_at: new Date().toISOString(),
+        })
+        .eq("id", user.id);
+      
+      if (error) {
+        toast.error(error.message);
+        return;
+      }
+      
+      setCaptain({
+        ...captain,
+        is_online: true,
+        current_lat: fallbackLat,
+        current_lng: fallbackLng,
+      });
+      toast.success("You're online!");
+      
+      // Asynchronously try to get precise location in the background
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+          async (pos) => {
+            const pt = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+            await supabase
+              .from("captains")
+              .update({
+                current_lat: pt.lat,
+                current_lng: pt.lng,
+                last_location_at: new Date().toISOString(),
+              })
+              .eq("id", user.id);
+            setCaptain((prev) => prev ? {
+              ...prev,
+              current_lat: pt.lat,
+              current_lng: pt.lng,
+            } : null);
+          },
+          () => {} // Silent ignore if background precise location fails
+        );
+      }
     } else {
       const { error } = await supabase.from("captains").update({ is_online: false }).eq("id", user.id);
       if (error) toast.error(error.message);
