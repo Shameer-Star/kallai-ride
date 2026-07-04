@@ -280,7 +280,31 @@ export default function CaptainDashboard() {
             toast.success("You're online!");
           }
         },
-        (err) => toast.error("Allow location to go online: " + err.message)
+        async (err) => {
+          const fallbackLat = captain.current_lat ?? DEFAULT_CENTER.lat;
+          const fallbackLng = captain.current_lng ?? DEFAULT_CENTER.lng;
+          toast.warning("Geolocation failed: " + err.message + ". Using fallback location.");
+          
+          const { error } = await supabase
+            .from("captains")
+            .update({
+              is_online: true,
+              current_lat: fallbackLat,
+              current_lng: fallbackLng,
+              last_location_at: new Date().toISOString(),
+            })
+            .eq("id", user.id);
+          if (error) toast.error(error.message);
+          else {
+            setCaptain({
+              ...captain,
+              is_online: true,
+              current_lat: fallbackLat,
+              current_lng: fallbackLng,
+            });
+            toast.success("You're online (Fallback location used)!");
+          }
+        }
       );
     } else {
       const { error } = await supabase.from("captains").update({ is_online: false }).eq("id", user.id);
