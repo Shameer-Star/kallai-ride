@@ -356,17 +356,17 @@ export default function AdminDashboard() {
               <p className="text-sm text-muted-foreground text-center py-6">No emergency SOS alerts</p>
             )}
             {sosAlerts.map((alert) => (
-              <Card key={alert.id} className="p-4 border-destructive border-2 bg-destructive/5 animate-in zoom-in-95">
-                <div className="flex justify-between items-start gap-3 flex-wrap">
-                  <div className="space-y-1.5">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <Badge variant="destructive" className="animate-pulse flex items-center gap-1">
-                        <ShieldAlert className="h-3 w-3 shrink-0" /> SOS EMERGENCY
-                      </Badge>
-                      <span className="text-xs text-muted-foreground font-semibold">
-                        {new Date(alert.created_at).toLocaleString()}
-                      </span>
-                    </div>
+              <Card key={alert.id} className="p-4 border-destructive/30 border-2 bg-destructive/5 animate-in zoom-in-95 flex flex-col justify-between">
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <Badge variant="destructive" className="animate-pulse flex items-center gap-1">
+                      <ShieldAlert className="h-3 w-3 shrink-0" /> SOS EMERGENCY
+                    </Badge>
+                    <span className="text-xs text-muted-foreground font-semibold">
+                      {new Date(alert.created_at).toLocaleString()}
+                    </span>
+                  </div>
+                  <div className="space-y-1 mt-1">
                     <div className="text-sm">
                       <span className="font-bold text-muted-foreground mr-1">Alert Type:</span> {alert.alert_type}
                     </div>
@@ -380,6 +380,8 @@ export default function AdminDashboard() {
                       Ride ID: {alert.ride_id} · User: {profilesMap[alert.customer_id]?.full_name ?? "Customer"} · Phone: {profilesMap[alert.customer_id]?.phone ?? "—"}
                     </div>
                   </div>
+                </div>
+                <div className="border-t border-destructive/20 mt-3 pt-3 flex justify-end">
                   <Button size="sm" variant="destructive" onClick={() => resolveSosAlert(alert.id)} disabled={busy} className="font-bold">
                     Mark Resolved
                   </Button>
@@ -393,42 +395,42 @@ export default function AdminDashboard() {
               <p className="text-sm text-muted-foreground text-center py-6">No support tickets</p>
             )}
             {supportTickets.map((t) => (
-              <Card key={t.id} className="p-3">
-                <div className="flex justify-between items-start gap-3">
-                  <div className="space-y-1.5">
-                    <div className="flex items-center gap-2">
-                      <Badge variant={t.status === "open" ? "destructive" : "secondary"} className="capitalize">
-                        {t.status}
-                      </Badge>
-                      <span className="text-xs text-muted-foreground font-medium">
-                        {new Date(t.created_at).toLocaleString()}
-                      </span>
-                    </div>
+              <Card key={t.id} className="p-4 flex flex-col justify-between">
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <Badge variant={t.status === "open" ? "destructive" : "secondary"} className="capitalize">
+                      {t.status}
+                    </Badge>
+                    <span className="text-xs text-muted-foreground font-medium">
+                      {new Date(t.created_at).toLocaleString()}
+                    </span>
+                  </div>
+                  <div className="space-y-1 mt-1">
                     <div className="text-sm font-semibold">{t.issue}</div>
                     <div className="text-xs text-muted-foreground">
                       Submitted by: {profilesMap[t.user_id]?.full_name ?? "User"} · Contact: {profilesMap[t.user_id]?.phone ?? "—"}
                     </div>
                   </div>
-                  <div className="flex gap-2">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => toggleTicketStatus(t.id, t.status)}
-                      disabled={busy}
-                      className="font-bold"
-                    >
-                      {t.status === "open" ? "Resolve" : "Re-open"}
-                    </Button>
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      onClick={() => deleteTicket(t.id)}
-                      disabled={busy}
-                      className="text-destructive hover:bg-destructive/10"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
+                </div>
+                <div className="border-t mt-3 pt-3 flex justify-end gap-2 items-center">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => toggleTicketStatus(t.id, t.status)}
+                    disabled={busy}
+                    className="font-bold h-9"
+                  >
+                    {t.status === "open" ? "Resolve" : "Re-open"}
+                  </Button>
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    onClick={() => deleteTicket(t.id)}
+                    disabled={busy}
+                    className="text-destructive hover:bg-destructive/10 h-9 w-9 shrink-0"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
                 </div>
               </Card>
             ))}
@@ -439,17 +441,17 @@ export default function AdminDashboard() {
               <p className="text-sm text-muted-foreground text-center py-6">No cancellations log</p>
             )}
             {cancellations.map((c) => (
-              <Card key={c.id} className="p-3 text-sm">
-                <div className="flex items-start gap-2 justify-between">
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-2">
-                      <Badge variant="outline" className="capitalize bg-muted">
-                        Cancelled by: {c.cancelled_by_role}
-                      </Badge>
-                      <span className="text-xs text-muted-foreground">
-                        {new Date(c.created_at).toLocaleString()}
-                      </span>
-                    </div>
+              <Card key={c.id} className="p-4 text-sm flex flex-col justify-between">
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <Badge variant="outline" className="capitalize bg-muted">
+                      Cancelled by: {c.cancelled_by_role}
+                    </Badge>
+                    <span className="text-xs text-muted-foreground">
+                      {new Date(c.created_at).toLocaleString()}
+                    </span>
+                  </div>
+                  <div className="space-y-1 mt-1">
                     <div>
                       <span className="font-semibold text-muted-foreground">Reason:</span> "{c.reason}"
                     </div>

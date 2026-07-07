@@ -226,6 +226,13 @@ export default function CaptainDashboard() {
       if (cancelled || !data) return;
       const myPt: Pt = { lat: captain!.current_lat!, lng: captain!.current_lng! };
       const candidates = (data as any[])
+        .filter((r) => {
+          // EXCLUDE rides created more than 20 minutes ago to prevent showing old bookings
+          const created = new Date(r.created_at).getTime();
+          const now = Date.now();
+          const ageMin = (now - created) / 60000;
+          return ageMin < 20;
+        })
         .filter((r) => !(r.rejected_by ?? []).includes(user!.id))
         .map((r) => ({
           ride: r as Ride,
