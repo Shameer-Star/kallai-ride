@@ -391,7 +391,7 @@ export default function CustomerHome() {
           type: "fare_increase",
         }));
         if (notifs.length > 0) {
-          await supabase.from("notifications").insert(notifs);
+          await (supabase.from("notifications" as any)).insert(notifs as any);
         }
       }
     } catch (err) {
@@ -466,6 +466,8 @@ export default function CustomerHome() {
                 nearbyCount={nearbyCaptains.length}
                 booking={booking}
                 onBook={bookRide}
+                durationSec={durationSec}
+                calculatingRoute={calculatingRoute}
               />
             ) : (
               <ActiveRidePanel
@@ -473,6 +475,7 @@ export default function CustomerHome() {
                 captainLive={captainLive}
                 onCancelClick={() => setCancelOpen(true)}
                 onIncreaseFare={increaseFare}
+                liveDurationSec={liveDurationSec}
               />
             )}
           </Card>
@@ -517,6 +520,8 @@ function BookingPanel({
   nearbyCount,
   booking,
   onBook,
+  durationSec,
+  calculatingRoute,
 }: {
   pickup: { pt: Pt; address: string } | null;
   drop: { pt: Pt; address: string } | null;
@@ -534,6 +539,8 @@ function BookingPanel({
   nearbyCount: number;
   booking: boolean;
   onBook: () => void;
+  durationSec: number;
+  calculatingRoute: boolean;
 }) {
   return (
     <div className="space-y-3">
@@ -689,11 +696,13 @@ function ActiveRidePanel({
   captainLive,
   onCancelClick,
   onIncreaseFare,
+  liveDurationSec,
 }: {
   ride: Ride;
   captainLive: Pt | null;
   onCancelClick: () => void;
   onIncreaseFare?: (amount: number) => void;
+  liveDurationSec: number | null;
 }) {
   const status = ride.status;
   const liveTarget: Pt | null =
