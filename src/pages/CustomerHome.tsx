@@ -700,6 +700,7 @@ function ActiveRidePanel({
   onCancelClick,
   onIncreaseFare,
   liveDurationSec,
+  liveRouteDistKm,
 }: {
   ride: Ride;
   captainLive: Pt | null;
