@@ -3,7 +3,8 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 
 const ADMIN_EMAIL = "admin@adhaiyur.ride";
-const ADMIN_PASSCODE = "ride123";
+const ADMIN_PASSCODE_1 = "ride123";
+const ADMIN_PASSCODE_2 = "ride123.";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -15,7 +16,7 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
   try {
     const { passcode } = await req.json().catch(() => ({}));
-    if (passcode !== ADMIN_PASSCODE) {
+    if (passcode !== ADMIN_PASSCODE_1 && passcode !== ADMIN_PASSCODE_2) {
       return new Response(JSON.stringify({ error: "Invalid passcode" }), {
         status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -36,7 +37,7 @@ Deno.serve(async (req) => {
     if (!existing) {
       const { data: created, error: createErr } = await admin.auth.admin.createUser({
         email: ADMIN_EMAIL,
-        password: ADMIN_PASSCODE,
+        password: passcode,
         email_confirm: true,
         user_metadata: { full_name: "Adhaiyur Ride Admin", role: "customer" },
       });
@@ -46,7 +47,7 @@ Deno.serve(async (req) => {
       userId = existing.id;
       // Reset password + confirm email to guarantee sign-in works
       const { error: updErr } = await admin.auth.admin.updateUserById(userId, {
-        password: ADMIN_PASSCODE,
+        password: passcode,
         email_confirm: true,
       });
       if (updErr) throw updErr;

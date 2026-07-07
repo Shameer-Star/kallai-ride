@@ -104,11 +104,12 @@ export default function Auth() {
   async function handleAdminLogin(e: React.FormEvent) {
     e.preventDefault();
     const username = adminUser.trim().toLowerCase();
+    const passwordToCheck = adminPass.trim();
     if (username !== "adhaiyurrideadmin" && username !== "kallairideadmin") {
       toast.error("Invalid admin username");
       return;
     }
-    if (adminPass !== "ride123") {
+    if (passwordToCheck !== "ride123" && passwordToCheck !== "ride123.") {
       toast.error("Invalid admin password");
       return;
     }
@@ -118,7 +119,7 @@ export default function Auth() {
       try {
         const { data: bootData, error: bootErr } = await supabase.functions.invoke(
           "admin-bootstrap",
-          { body: { passcode: adminPass } }
+          { body: { passcode: passwordToCheck } }
         );
         if (bootErr) console.warn("Admin bootstrap edge function warning:", bootErr);
         if (bootData && !bootData.ok) console.warn("Admin bootstrap warning:", bootData.error);
@@ -134,14 +135,14 @@ export default function Auth() {
 
       let { error: signInErr } = await supabase.auth.signInWithPassword({
         email: emailToUse,
-        password: adminPass,
+        password: passwordToCheck,
       });
 
       if (signInErr && emailToUse === "admin@adhaiyur.ride") {
         // Fallback to old admin email if the Supabase instance hasn't updated its default boot admin
         const fallback = await supabase.auth.signInWithPassword({
           email: "kallairideadmin@kallai.ride",
-          password: adminPass,
+          password: passwordToCheck,
         });
         signInErr = fallback.error;
       }
