@@ -65,6 +65,7 @@ export default function CustomerHome() {
   const [rateRide, setRateRide] = useState<Ride | null>(null);
   const [userLocation, setUserLocation] = useState<Pt | null>(null);
   const [liveDurationSec, setLiveDurationSec] = useState<number | null>(null);
+  const [liveRouteDistKm, setLiveRouteDistKm] = useState<number | null>(null);
   const lastFetchedTime = useRef<number>(0);
   const lastRideRef = useRef<{ id: string; status: string } | null>(null);
 
@@ -305,8 +306,9 @@ export default function CustomerHome() {
       lastFetchedTime.current = now;
       const r = await getRouteDistanceKm(captainLive, target);
       if (cancelled) return;
-      if (r && r.durationSec != null) {
-        setLiveDurationSec(r.durationSec);
+      if (r) {
+        if (r.durationSec != null) setLiveDurationSec(r.durationSec);
+        if (r.distanceKm != null) setLiveRouteDistKm(r.distanceKm);
       }
     })();
 
@@ -476,6 +478,7 @@ export default function CustomerHome() {
                 onCancelClick={() => setCancelOpen(true)}
                 onIncreaseFare={increaseFare}
                 liveDurationSec={liveDurationSec}
+                liveRouteDistKm={liveRouteDistKm}
               />
             )}
           </Card>
@@ -703,6 +706,7 @@ function ActiveRidePanel({
   onCancelClick: () => void;
   onIncreaseFare?: (amount: number) => void;
   liveDurationSec: number | null;
+  liveRouteDistKm: number | null;
 }) {
   const status = ride.status;
   const liveTarget: Pt | null =
@@ -711,7 +715,7 @@ function ActiveRidePanel({
       : status === "started"
       ? { lat: ride.drop_lat, lng: ride.drop_lng }
       : null;
-  const liveDistKm = captainLive && liveTarget ? haversineKm(captainLive, liveTarget) : null;
+  const liveDistKm = liveRouteDistKm != null ? liveRouteDistKm : (captainLive && liveTarget ? haversineKm(captainLive, liveTarget) : null);
   const etaMin = liveDurationSec != null
     ? Math.max(1, Math.round(liveDurationSec / 60))
     : liveDistKm != null
@@ -828,7 +832,7 @@ function ActiveRidePanel({
 
       {(status === "requested" || status === "accepted") && (
         <Button variant="outline" onClick={onCancelClick} className="w-full">
-          <X className="h-4 w-4 mr-1" /> Cancel · ரத்து
+          <X className="h-4 w-4 mr-1" /> {status === "accepted" ? "Cancel Driver · கேப்டனை ரத்து செய்" : "Cancel Ride · ரத்து செய்"}
         </Button>
       )}
     </div>

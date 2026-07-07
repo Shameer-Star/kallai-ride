@@ -2,8 +2,8 @@
 export type VehicleType = "bike" | "auto";
 
 export const FARE_CONFIG: Record<VehicleType, { base: number; perKm: number; label: string; labelTa: string }> = {
-  bike: { base: 20, perKm: 8, label: "Bike", labelTa: "பைக்" },
-  auto: { base: 30, perKm: 12, label: "Auto", labelTa: "ஆட்டோ" },
+  bike: { base: 10, perKm: 10, label: "Bike", labelTa: "பைக்" },
+  auto: { base: 15, perKm: 15, label: "Auto", labelTa: "ஆட்டோ" },
 };
 
 export const MATCH_RADIUS_KM = 5;
