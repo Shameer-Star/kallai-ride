@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, ReactNode } from "react";
+import { createContext, useContext, useEffect, useState, useRef, ReactNode } from "react";
 import { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -25,6 +25,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [role, setRole] = useState<AppRole | null>(null);
   const [loading, setLoading] = useState(true);
+  const bootedRef = useRef(false);
 
   async function fetchRole(userId: string) {
     try {
@@ -75,7 +76,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       } catch (err) {
         console.error("Session initialization error:", err);
       } finally {
-        if (active) setLoading(false);
+        if (active) {
+          bootedRef.current = true;
+          setLoading(false);
+        }
       }
     }
 
@@ -92,6 +96,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setSession(sess);
       setUser(sess?.user ?? null);
       if (sess?.user) {
+        // If we haven't completed checkUser yet, let checkUser handle loading & role fetching
+        if (!bootedRef.current) {
+          return;
+        }
+
         // Show loading spinner on fresh logins where no role is cached yet
         const hasCachedRole = !!localStorage.getItem(`role_${sess.user.id}`);
         if (!hasCachedRole) {
@@ -108,7 +117,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       } else {
         if (active) {
           setRole(null);
-          setLoading(false);
+          // If we haven't booted, let checkUser release loading state
+          if (bootedRef.current) {
+            setLoading(false);
+          }
         }
       }
     });
