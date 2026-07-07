@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { calcFare, FARE_CONFIG, haversineKm, MATCH_RADIUS_KM, VehicleType } from "@/lib/fare";
 import { getRouteDistanceKm, reverseGeocode, GeoPlace, LOCAL_PLACES } from "@/lib/geocode";
+import { playNotificationSound } from "@/lib/alertSound";
 import { Bike, Car, Loader2, MapPin, X, CheckCircle2, Package, Users, KeyRound } from "lucide-react";
 import { toast } from "sonner";
 import { CancellationDialog } from "@/components/CancellationDialog";
@@ -53,6 +54,8 @@ export default function CustomerHome() {
   const [rideType, setRideType] = useState<RideType>("passenger");
   const [parcel, setParcel] = useState<ParcelDetails>(EMPTY_PARCEL);
   const [distanceKm, setDistanceKm] = useState<number>(0);
+  const [durationSec, setDurationSec] = useState<number>(0);
+  const [calculatingRoute, setCalculatingRoute] = useState(false);
   const [route, setRoute] = useState<[number, number][] | null>(null);
   const [nearbyCaptains, setNearbyCaptains] = useState<Pt[]>([]);
   const [captainLive, setCaptainLive] = useState<Pt | null>(null);
@@ -60,39 +63,67 @@ export default function CustomerHome() {
   const [booking, setBooking] = useState(false);
   const [cancelOpen, setCancelOpen] = useState(false);
   const [rateRide, setRateRide] = useState<Ride | null>(null);
+  const [userLocation, setUserLocation] = useState<Pt | null>(null);
+  const [liveDurationSec, setLiveDurationSec] = useState<number | null>(null);
+  const lastFetchedTime = useRef<number>(0);
   const lastRideRef = useRef<{ id: string; status: string } | null>(null);
 
+  // Watch user location continuously
   useEffect(() => {
-    if (!navigator.geolocation) return;
-    navigator.geolocation.getCurrentPosition(
+    if (!navigator.geolocation) {
+      toast.error("Geolocation is not supported by your browser");
+      return;
+    }
+    const watchId = navigator.geolocation.watchPosition(
       async (pos) => {
         const pt = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-        setCenter(pt);
-        const addr = await reverseGeocode(pt.lat, pt.lng);
-        setPickup({ pt, address: addr });
+        setUserLocation(pt);
+        setPickup((prev) => {
+          if (!prev) {
+            setCenter(pt);
+            reverseGeocode(pt.lat, pt.lng).then((addr) => {
+              setPickup({ pt, address: addr });
+            });
+          }
+          return prev;
+        });
       },
-      () => {},
-      { enableHighAccuracy: true, timeout: 8000 }
+      (err) => {
+        if (err.code === err.PERMISSION_DENIED) {
+          toast.error("Location permission denied. Please enable GPS access in browser settings.");
+        } else {
+          console.warn("Geolocation watch error:", err.message);
+        }
+      },
+      { enableHighAccuracy: true, maximumAge: 5000, timeout: 10000 }
     );
+    return () => navigator.geolocation.clearWatch(watchId);
   }, []);
 
+  // Fetch route and distance/duration
   useEffect(() => {
     if (!pickup || !drop) {
       setRoute(null);
       setDistanceKm(0);
+      setDurationSec(0);
       return;
     }
     let cancelled = false;
+    setCalculatingRoute(true);
     (async () => {
       const r = await getRouteDistanceKm(pickup.pt, drop.pt);
       if (cancelled) return;
       if (r) {
         setRoute(r.geometry);
         setDistanceKm(r.distanceKm);
+        setDurationSec(r.durationSec);
       } else {
         setRoute(null);
-        setDistanceKm(haversineKm(pickup.pt, drop.pt));
+        const dist = haversineKm(pickup.pt, drop.pt);
+        setDistanceKm(dist);
+        setDurationSec((dist / 25) * 3600); // 25 km/h fallback
       }
+      setCalculatingRoute(false);
     })();
     return () => {
       cancelled = true;
@@ -128,7 +159,7 @@ export default function CustomerHome() {
     if (!user) return;
     let cancelled = false;
     const RIDE_COLS =
-      "id, status, captain_id, pickup_address, pickup_lat, pickup_lng, drop_address, drop_lat, drop_lng, fare, distance_km, vehicle_type, ride_type";
+      "id, status, captain_id, pickup_address, pickup_lat, pickup_lng, drop_address, drop_lat, drop_lng, fare, distance_km, vehicle_type, ride_type, created_at";
     async function load() {
       const { data } = await supabase
         .from("rides")
@@ -140,6 +171,24 @@ export default function CustomerHome() {
         .maybeSingle();
       if (cancelled) return;
       let next = (data as unknown as Ride) ?? null;
+
+      // Auto cancel if requested more than 20 minutes ago and no captain accepted
+      if (next && next.status === "requested" && (next as any).created_at) {
+        const elapsed = Date.now() - new Date((next as any).created_at).getTime();
+        if (elapsed > 20 * 60 * 1000) {
+          await supabase
+            .from("rides")
+            .update({
+              status: "cancelled",
+              cancellation_reason: "Timeout: No captain accepted the ride within 20 minutes",
+              cancelled_by: user!.id
+            })
+            .eq("id", next.id);
+          toast.warning("Booking timed out: No captain accepted your ride in 20 minutes.");
+          next = null;
+        }
+      }
+
       // Fetch OTP separately via RPC when ride is accepted (otp column not exposed in base table)
       if (next && next.status === "accepted" && next.captain_id) {
         const { data: otpData } = await supabase.rpc("get_my_ride_otp" as any, { _ride_id: next.id });
@@ -167,11 +216,18 @@ export default function CustomerHome() {
     }
     load();
     const channel = supabase
-      .channel(`customer-rides-${user.id}`)
+      .channel(`customer-feed-${user.id}`)
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "rides", filter: `customer_id=eq.${user.id}` },
         () => load()
+      )
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "notifications", filter: `user_id=eq.${user.id}` },
+        () => {
+          load();
+        }
       )
       .subscribe();
     return () => {
@@ -180,7 +236,7 @@ export default function CustomerHome() {
     };
   }, [user]);
 
-  // Live captain tracking: subscribe to assigned captain's location while ride is active
+  // Live captain tracking: subscribe to assigned captain's location (Postgres & Broadcast)
   useEffect(() => {
     const capId = activeRide?.captain_id;
     const status = activeRide?.status;
@@ -203,6 +259,12 @@ export default function CustomerHome() {
     load();
     const channel = supabase
       .channel(`captain-live-${capId}`)
+      .on("broadcast", { event: "location" }, (payload: any) => {
+        const { lat, lng } = payload.payload;
+        if (lat != null && lng != null) {
+          setCaptainLive({ lat, lng });
+        }
+      })
       .on(
         "postgres_changes",
         { event: "UPDATE", schema: "public", table: "captains", filter: `id=eq.${capId}` },
@@ -219,6 +281,39 @@ export default function CustomerHome() {
       supabase.removeChannel(channel);
     };
   }, [activeRide?.captain_id, activeRide?.status]);
+
+  // Dynamically update active ride duration ETA from OSRM
+  useEffect(() => {
+    const target =
+      activeRide?.status === "accepted"
+        ? { lat: activeRide.pickup_lat, lng: activeRide.pickup_lng }
+        : activeRide?.status === "started"
+        ? { lat: activeRide.drop_lat, lng: activeRide.drop_lng }
+        : null;
+
+    if (!captainLive || !target || !activeRide) {
+      setLiveDurationSec(null);
+      return;
+    }
+
+    const now = Date.now();
+    // Fetch OSRM duration at most once every 15 seconds to avoid rate limiting
+    if (now - lastFetchedTime.current < 15000) return;
+
+    let cancelled = false;
+    (async () => {
+      lastFetchedTime.current = now;
+      const r = await getRouteDistanceKm(captainLive, target);
+      if (cancelled) return;
+      if (r && r.durationSec != null) {
+        setLiveDurationSec(r.durationSec);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [captainLive, activeRide?.id, activeRide?.status]);
 
   const fare = useMemo(() => {
     if (distanceKm <= 0) return 0;
@@ -341,10 +436,10 @@ export default function CustomerHome() {
           drop={drop?.pt}
           captains={
             activeRide && captainLive
-              ? [captainLive]
+              ? [{ ...captainLive, vehicle_type: activeRide.vehicle_type }]
               : activeRide
               ? []
-              : nearbyCaptains
+              : nearbyCaptains.map((pt) => ({ ...pt, vehicle_type: vehicle }))
           }
           route={route}
         />
@@ -535,39 +630,48 @@ function BookingPanel({
             {(Object.keys(FARE_CONFIG) as VehicleType[]).map((v) => {
               const cfg = FARE_CONFIG[v];
               const f = distanceKm > 0 ? calcFare(v, distanceKm) + (rideType === "parcel" ? 10 : 0) : 0;
-              const Icon = v === "bike" ? Bike : Car;
+              const emoji = v === "bike" ? "🏍️" : "🛺";
               return (
                 <button
                   key={v}
                   type="button"
                   onClick={() => setVehicle(v)}
-                  className={`p-3 rounded-xl border-2 text-left transition-all ${
-                    vehicle === v ? "border-primary bg-primary/10" : "border-border"
+                  className={`p-3 rounded-xl border-2 text-left transition-all relative overflow-hidden ${
+                    vehicle === v ? "border-primary bg-primary/10 shadow-sm" : "border-border"
                   }`}
                 >
                   <div className="flex items-center justify-between">
-                    <Icon className="h-5 w-5" />
-                    <span className="font-bold">₹{f}</span>
+                    <span className="text-2xl">{emoji}</span>
+                    <span className="font-extrabold text-base">₹{f}</span>
                   </div>
-                  <div className="mt-1 text-sm font-semibold">{cfg.label}</div>
-                  <div className="text-[11px] text-muted-foreground">{cfg.labelTa}</div>
+                  <div className="mt-2 text-sm font-bold">{cfg.label}</div>
+                  <div className="text-[10px] text-muted-foreground">{cfg.labelTa}</div>
                 </button>
               );
             })}
           </div>
 
           <div className="flex items-center justify-between text-xs text-muted-foreground">
-            <span>{distanceKm.toFixed(1)} km · {nearbyCount} captain{nearbyCount === 1 ? "" : "s"} nearby</span>
+            <span>
+              {distanceKm.toFixed(1)} km 
+              {durationSec > 0 && ` (~${Math.round(durationSec / 60)} mins)`} · {nearbyCount} captain{nearbyCount === 1 ? "" : "s"} nearby
+            </span>
             <span>Estimated · ₹{fare}</span>
           </div>
 
-          <Button onClick={onBook} disabled={booking || distanceKm === 0} className="w-full h-12 font-bold text-base">
-            {booking ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              `${rideType === "parcel" ? "Send Parcel" : `Book ${FARE_CONFIG[vehicle].label}`} · ₹${fare}`
-            )}
-          </Button>
+          {calculatingRoute ? (
+            <Button disabled className="w-full h-12 font-bold text-base">
+              <Loader2 className="h-4 w-4 animate-spin mr-2" /> Calculating Fare & Route...
+            </Button>
+          ) : (
+            <Button onClick={onBook} disabled={booking || distanceKm === 0} className="w-full h-12 font-bold text-base">
+              {booking ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                `${rideType === "parcel" ? "Send Parcel" : `Book ${FARE_CONFIG[vehicle].label}`} · ₹${fare}`
+              )}
+            </Button>
+          )}
         </>
       )}
 
@@ -599,7 +703,11 @@ function ActiveRidePanel({
       ? { lat: ride.drop_lat, lng: ride.drop_lng }
       : null;
   const liveDistKm = captainLive && liveTarget ? haversineKm(captainLive, liveTarget) : null;
-  const etaMin = liveDistKm != null ? Math.max(1, Math.round((liveDistKm / 25) * 60)) : null;
+  const etaMin = liveDurationSec != null
+    ? Math.max(1, Math.round(liveDurationSec / 60))
+    : liveDistKm != null
+    ? Math.max(1, Math.round((liveDistKm / 25) * 60))
+    : null;
 
   return (
     <div className="space-y-3">
@@ -680,8 +788,9 @@ function ActiveRidePanel({
       </div>
 
       <div className="flex items-center justify-between">
-        <span className="text-sm text-muted-foreground">
-          {ride.distance_km} km · {ride.vehicle_type}
+        <span className="text-sm text-muted-foreground flex items-center gap-1">
+          <span>{ride.vehicle_type === "bike" ? "🏍️" : "🛺"}</span>
+          <span className="capitalize">{ride.vehicle_type}</span> · {ride.distance_km} km
           {ride.ride_type === "parcel" && " · 📦"}
         </span>
         <span className="font-bold text-lg">₹{ride.fare}</span>

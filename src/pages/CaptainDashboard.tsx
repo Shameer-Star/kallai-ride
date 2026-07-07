@@ -111,6 +111,26 @@ export default function CaptainDashboard() {
     load();
   }, [user]);
 
+  const liveChannelRef = useRef<any>(null);
+  const lastDbUpdateTime = useRef<number>(0);
+
+  // Subscribe to live broadcast channel when online
+  useEffect(() => {
+    if (!user || !captain?.is_online) {
+      if (liveChannelRef.current) {
+        supabase.removeChannel(liveChannelRef.current);
+        liveChannelRef.current = null;
+      }
+      return;
+    }
+    const channel = supabase.channel(`captain-live-${user.id}`);
+    channel.subscribe();
+    liveChannelRef.current = channel;
+    return () => {
+      if (channel) supabase.removeChannel(channel);
+    };
+  }, [user, captain?.is_online]);
+
   // Live GPS tracking when online
   useEffect(() => {
     if (!captain?.is_online || !user) return;
@@ -119,16 +139,37 @@ export default function CaptainDashboard() {
       async (pos) => {
         const pt = { lat: pos.coords.latitude, lng: pos.coords.longitude };
         setCenter(pt);
-        await supabase
-          .from("captains")
-          .update({
-            current_lat: pt.lat,
-            current_lng: pt.lng,
-            last_location_at: new Date().toISOString(),
-          })
-          .eq("id", user.id);
+
+        // 1. Broadcast immediately to WebSocket topic
+        if (liveChannelRef.current) {
+          liveChannelRef.current.send({
+            type: "broadcast",
+            event: "location",
+            payload: { lat: pt.lat, lng: pt.lng }
+          });
+        }
+
+        // 2. Throttle database updates to once every 5 seconds
+        const now = Date.now();
+        if (now - lastDbUpdateTime.current >= 5000) {
+          lastDbUpdateTime.current = now;
+          await supabase
+            .from("captains")
+            .update({
+              current_lat: pt.lat,
+              current_lng: pt.lng,
+              last_location_at: new Date().toISOString(),
+            })
+            .eq("id", user.id);
+        }
       },
-      () => {},
+      (err) => {
+        if (err.code === err.PERMISSION_DENIED) {
+          toast.error("Location permission denied. Please allow GPS access in settings to stay online.");
+        } else {
+          console.warn("Geolocation watch error:", err.message);
+        }
+      },
       { enableHighAccuracy: true, maximumAge: 5000, timeout: 10000 }
     );
     return () => navigator.geolocation.clearWatch(watchId);
@@ -151,7 +192,24 @@ export default function CaptainDashboard() {
         .order("created_at", { ascending: false })
         .limit(1)
         .maybeSingle();
-      if (!cancelled) setActiveRide((data as unknown as Ride) ?? null);
+      
+      if (!cancelled) {
+        let activeRideRow = (data as unknown as Ride) ?? null;
+        if (activeRideRow && activeRideRow.ride_type === "parcel") {
+          // Securly fetch sender/receiver phone numbers via RPC
+          const { data: contacts } = await supabase.rpc("get_ride_parcel_contacts" as any, {
+            _ride_id: activeRideRow.id
+          });
+          if (contacts && contacts.length > 0) {
+            activeRideRow = {
+              ...activeRideRow,
+              sender_phone: contacts[0].sender_phone,
+              receiver_phone: contacts[0].receiver_phone,
+            };
+          }
+        }
+        setActiveRide(activeRideRow);
+      }
     }
 
     async function loadPending() {
@@ -210,9 +268,7 @@ export default function CaptainDashboard() {
       .on(
         "postgres_changes",
         { event: "INSERT", schema: "public", table: "notifications", filter: `user_id=eq.${user.id}` },
-        (payload: any) => {
-          console.log("New real-time notification:", payload.new);
-          toast.success(payload.new.title + ": " + payload.new.body);
+        () => {
           loadActive();
           loadPending();
           loadEarnings();
@@ -581,7 +637,7 @@ function ActiveRidePanel({
     ride.status === "accepted"
       ? { lat: ride.pickup_lat, lng: ride.pickup_lng, label: "Go to pickup" }
       : { lat: ride.drop_lat, lng: ride.drop_lng, label: "Go to drop" };
-  const navUrl = `https://www.google.com/maps/dir/?api=1&destination=${dest.lat},${dest.lng}`;
+  const navUrl = `https://www.google.com/maps/dir/?api=1&origin=${center.lat},${center.lng}&destination=${dest.lat},${dest.lng}&travelmode=driving`;
   const isParcel = ride.ride_type === "parcel";
 
   return (
@@ -747,21 +803,93 @@ function DocsForm({ captain, onUpdate }: { captain: Captain; onUpdate: (c: Capta
   const [vehicleNumber, setVehicleNumber] = useState(captain.vehicle_number ?? "");
   const [licenseNumber, setLicenseNumber] = useState(captain.license_number ?? "");
   const [saving, setSaving] = useState(false);
+  const [uploadingField, setUploadingField] = useState<string | null>(null);
+
+  // Client-side image compression
+  async function compressImage(file: File): Promise<Blob> {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.src = URL.createObjectURL(file);
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        const ctx = canvas.getContext("2d");
+        if (!ctx) {
+          resolve(file);
+          return;
+        }
+        const maxDim = 1200;
+        let width = img.width;
+        let height = img.height;
+        if (width > maxDim || height > maxDim) {
+          if (width > height) {
+            height = (height / width) * maxDim;
+            width = maxDim;
+          } else {
+            width = (width / height) * maxDim;
+            height = maxDim;
+          }
+        }
+        canvas.width = width;
+        canvas.height = height;
+        ctx.drawImage(img, 0, 0, width, height);
+        canvas.toBlob(
+          (blob) => {
+            if (blob) {
+              resolve(blob);
+            } else {
+              resolve(file);
+            }
+          },
+          "image/jpeg",
+          0.75
+        );
+      };
+      img.onerror = () => resolve(file);
+    });
+  }
 
   async function uploadFile(field: "license_url" | "rc_url" | "photo_url", file: File) {
-    const ext = file.name.split(".").pop();
-    const path = `${captain.id}/${field}-${Date.now()}.${ext}`;
-    const { error } = await supabase.storage.from("captain-docs").upload(path, file, { upsert: true });
-    if (error) {
-      toast.error(error.message);
+    if (!file.type.startsWith("image/")) {
+      toast.error("Only image files are allowed");
       return;
     }
-    const update: any = { [field]: path };
-    const { error: upErr } = await supabase.from("captains").update(update).eq("id", captain.id);
-    if (upErr) toast.error(upErr.message);
-    else {
-      toast.success("Uploaded");
-      onUpdate({ ...captain, [field]: path } as Captain);
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error("File size must be under 5MB");
+      return;
+    }
+
+    setUploadingField(field);
+    try {
+      toast("Compressing image...");
+      const compressedBlob = await compressImage(file);
+      
+      const bucket =
+        field === "photo_url"
+          ? "profile-images"
+          : field === "license_url"
+          ? "licenses"
+          : "vehicle-documents";
+
+      const ext = file.name.split(".").pop();
+      const path = `${captain.id}/${field}-${Date.now()}.${ext}`;
+
+      toast("Uploading secure document...");
+      const { error } = await supabase.storage.from(bucket).upload(path, compressedBlob, { upsert: true });
+      if (error) {
+        toast.error(error.message);
+        return;
+      }
+      const update: any = { [field]: path };
+      const { error: upErr } = await supabase.from("captains").update(update).eq("id", captain.id);
+      if (upErr) toast.error(upErr.message);
+      else {
+        toast.success("Document uploaded successfully");
+        onUpdate({ ...captain, [field]: path } as Captain);
+      }
+    } catch (err: any) {
+      toast.error(err.message ?? "Upload failed");
+    } finally {
+      setUploadingField(null);
     }
   }
 
@@ -822,14 +950,18 @@ function DocsForm({ captain, onUpdate }: { captain: Captain; onUpdate: (c: Capta
       {(["photo_url", "license_url", "rc_url"] as const).map((field) => (
         <div key={field} className="flex items-center gap-2">
           <Label className="text-xs flex-1 capitalize">{field.replace("_url", "").replace("_", " ")}</Label>
-          <input
-            type="file"
-            accept="image/*"
-            onChange={(e) => e.target.files?.[0] && uploadFile(field, e.target.files[0])}
-            className="text-xs"
-          />
-          {captain[field] && (
-            <CheckCircle2 className="h-4 w-4" style={{ color: "hsl(var(--success))" }} />
+          {uploadingField === field ? (
+            <span className="text-xs text-muted-foreground animate-pulse">Uploading...</span>
+          ) : (
+            <input
+              type="file"
+              accept="image/*"
+              onChange={(e) => e.target.files?.[0] && uploadFile(field, e.target.files[0])}
+              className="text-xs w-48"
+            />
+          )}
+          {captain[field] && !uploadingField && (
+            <CheckCircle2 className="h-4 w-4 shrink-0" style={{ color: "hsl(var(--success))" }} />
           )}
         </div>
       ))}

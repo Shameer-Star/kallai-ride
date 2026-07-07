@@ -170,11 +170,11 @@ export async function reverseGeocode(lat: number, lng: number): Promise<string> 
   }
 }
 
-// Free routing via OSRM public demo server — returns distance in km
+// Free routing via OSRM public demo server — returns distance in km and duration in seconds
 export async function getRouteDistanceKm(
   a: { lat: number; lng: number },
   b: { lat: number; lng: number }
-): Promise<{ distanceKm: number; geometry: [number, number][] } | null> {
+): Promise<{ distanceKm: number; durationSec: number; geometry: [number, number][] } | null> {
   try {
     const url = `https://router.project-osrm.org/route/v1/driving/${a.lng},${a.lat};${b.lng},${b.lat}?overview=full&geometries=geojson`;
     const res = await fetch(url);
@@ -185,7 +185,11 @@ export async function getRouteDistanceKm(
     const coords: [number, number][] = route.geometry.coordinates.map(
       (c: [number, number]) => [c[1], c[0]]
     );
-    return { distanceKm: route.distance / 1000, geometry: coords };
+    return {
+      distanceKm: route.distance / 1000,
+      durationSec: route.duration ?? 0,
+      geometry: coords,
+    };
   } catch {
     return null;
   }

@@ -31,7 +31,7 @@ export function DriverCard({ captainId }: { captainId: string }) {
       setC(data as Captain);
       if (data?.photo_url) {
         const { data: signed } = await supabase.storage
-          .from("captain-docs")
+          .from("profile-images")
           .createSignedUrl(data.photo_url, 600);
         if (!cancelled) setPhotoSigned(signed?.signedUrl ?? null);
       }
@@ -54,7 +54,7 @@ export function DriverCard({ captainId }: { captainId: string }) {
       <div className="flex-1 min-w-0">
         <div className="font-bold text-sm truncate">{c.full_name ?? "Captain"}</div>
         <div className="text-[11px] text-muted-foreground truncate">
-          {c.vehicle_type === "bike" ? "🛵" : "🛺"} {c.vehicle_number ?? "—"}
+          {c.vehicle_type === "bike" ? "🏍️" : "🛺"} {c.vehicle_number ?? "—"}
         </div>
         <div className="flex items-center gap-1 text-xs">
           <Star className="h-3 w-3 fill-current text-yellow-500" />

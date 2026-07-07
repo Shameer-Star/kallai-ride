@@ -28,21 +28,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     // Subscribe FIRST, then check session
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, sess) => {
+    const { data: sub } = supabase.auth.onAuthStateChange(async (event, sess) => {
+      if (event === "PASSWORD_RECOVERY") {
+        window.location.hash = ""; // Clear hash
+        window.location.pathname = "/reset-password";
+        return;
+      }
+
       setSession(sess);
       setUser(sess?.user ?? null);
       if (sess?.user) {
-        // Defer DB call to avoid deadlock
-        setTimeout(() => fetchRole(sess.user.id), 0);
+        setLoading(true);
+        await fetchRole(sess.user.id);
       } else {
         setRole(null);
       }
+      setLoading(false);
     });
 
-    supabase.auth.getSession().then(({ data: { session: sess } }) => {
+    supabase.auth.getSession().then(async ({ data: { session: sess } }) => {
       setSession(sess);
       setUser(sess?.user ?? null);
-      if (sess?.user) fetchRole(sess.user.id);
+      if (sess?.user) {
+        await fetchRole(sess.user.id);
+      } else {
+        setRole(null);
+      }
       setLoading(false);
     });
 

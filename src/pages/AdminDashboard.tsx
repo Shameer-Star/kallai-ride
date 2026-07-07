@@ -18,6 +18,10 @@ import {
   Star,
   AlertTriangle,
   FileText,
+  ShieldAlert,
+  MessageSquare,
+  Clock,
+  Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -27,6 +31,9 @@ export default function AdminDashboard() {
   const [captains, setCaptains] = useState<any[]>([]);
   const [profilesMap, setProfilesMap] = useState<Record<string, any>>({});
   const [rides, setRides] = useState<any[]>([]);
+  const [sosAlerts, setSosAlerts] = useState<any[]>([]);
+  const [supportTickets, setSupportTickets] = useState<any[]>([]);
+  const [cancellations, setCancellations] = useState<any[]>([]);
   const [busy, setBusy] = useState(false);
   const [docCaptain, setDocCaptain] = useState<any | null>(null);
   const [docUrls, setDocUrls] = useState<{ license?: string; rc?: string; photo?: string }>({});
@@ -38,6 +45,9 @@ export default function AdminDashboard() {
       .channel("admin-feed")
       .on("postgres_changes", { event: "*", schema: "public", table: "rides" }, refresh)
       .on("postgres_changes", { event: "*", schema: "public", table: "captains" }, refresh)
+      .on("postgres_changes", { event: "*", schema: "public", table: "emergency_alerts" as any }, refresh)
+      .on("postgres_changes", { event: "*", schema: "public", table: "support_tickets" as any }, refresh)
+      .on("postgres_changes", { event: "*", schema: "public", table: "cancellations" }, refresh)
       .subscribe();
     return () => {
       supabase.removeChannel(channel);
@@ -46,11 +56,22 @@ export default function AdminDashboard() {
   }, [user, role]);
 
   async function refresh() {
-    const [{ data: rideRows }, { data: capRows }, { data: roleRows }, { data: profRows }] = await Promise.all([
+    const [
+      { data: rideRows },
+      { data: capRows },
+      { data: roleRows },
+      { data: profRows },
+      { data: sosRows },
+      { data: ticketRows },
+      { data: cancelRows }
+    ] = await Promise.all([
       supabase.from("rides").select("*").order("created_at", { ascending: false }).limit(100),
       supabase.from("captains").select("*").order("created_at", { ascending: false }),
       supabase.from("user_roles").select("role"),
       supabase.from("profiles").select("id, full_name, phone"),
+      supabase.from("emergency_alerts" as any).select("*").order("created_at", { ascending: false }),
+      supabase.from("support_tickets" as any).select("*").order("created_at", { ascending: false }),
+      supabase.from("cancellations").select("*").order("created_at", { ascending: false }),
     ]);
     const allRides = (rideRows as any[]) ?? [];
     const allCaps = (capRows as any[]) ?? [];
@@ -73,20 +94,23 @@ export default function AdminDashboard() {
     setCaptains(allCaps);
     setProfilesMap(profMap);
     setRides(allRides);
+    setSosAlerts(sosRows ?? []);
+    setSupportTickets(ticketRows ?? []);
+    setCancellations(cancelRows ?? []);
   }
 
   async function openDocs(c: any) {
     setDocCaptain(c);
-    const fields: Record<string, string | null> = {
-      license: c.license_url,
-      rc: c.rc_url,
-      photo: c.photo_url,
+    const fields: Record<string, { bucket: string; path: string | null }> = {
+      license: { bucket: "licenses", path: c.license_url },
+      rc: { bucket: "vehicle-documents", path: c.rc_url },
+      photo: { bucket: "profile-images", path: c.photo_url },
     };
     const urls: any = {};
     for (const k of Object.keys(fields)) {
-      const path = fields[k];
+      const { bucket, path } = fields[k];
       if (path) {
-        const { data } = await supabase.storage.from("captain-docs").createSignedUrl(path, 600);
+        const { data } = await supabase.storage.from(bucket).createSignedUrl(path, 600);
         urls[k] = data?.signedUrl;
       }
     }
@@ -114,6 +138,64 @@ export default function AdminDashboard() {
     if (error) toast.error(error.message);
     else {
       toast.warning("Captain suspended");
+      refresh();
+    }
+  }
+
+  async function changeWarningLevel(captainId: string, currentLevel: number, delta: number) {
+    setBusy(true);
+    const nextLevel = Math.max(0, currentLevel + delta);
+    const { error } = await supabase
+      .from("captains")
+      .update({ warning_level: nextLevel })
+      .eq("id", captainId);
+    setBusy(false);
+    if (error) toast.error(error.message);
+    else {
+      toast.success(`Warning level set to ${nextLevel}`);
+      refresh();
+    }
+  }
+
+  async function toggleTicketStatus(ticketId: string, currentStatus: string) {
+    setBusy(true);
+    const nextStatus = currentStatus === "open" ? "resolved" : "open";
+    const { error } = await supabase
+      .from("support_tickets" as any)
+      .update({ status: nextStatus })
+      .eq("id", ticketId);
+    setBusy(false);
+    if (error) toast.error(error.message);
+    else {
+      toast.success(`Ticket marked as ${nextStatus}`);
+      refresh();
+    }
+  }
+
+  async function deleteTicket(ticketId: string) {
+    setBusy(true);
+    const { error } = await supabase
+      .from("support_tickets" as any)
+      .delete()
+      .eq("id", ticketId);
+    setBusy(false);
+    if (error) toast.error(error.message);
+    else {
+      toast.success("Ticket deleted");
+      refresh();
+    }
+  }
+
+  async function resolveSosAlert(alertId: string) {
+    setBusy(true);
+    const { error } = await supabase
+      .from("emergency_alerts" as any)
+      .delete()
+      .eq("id", alertId);
+    setBusy(false);
+    if (error) toast.error(error.message);
+    else {
+      toast.success("SOS Alert resolved and cleared");
       refresh();
     }
   }
@@ -147,12 +229,21 @@ export default function AdminDashboard() {
         </div>
 
         <Tabs defaultValue="captains" className="w-full">
-          <TabsList>
+          <TabsList className="grid grid-cols-5 w-full h-11">
             <TabsTrigger value="captains">Captains ({captains.length})</TabsTrigger>
             <TabsTrigger value="rides">Rides ({rides.length})</TabsTrigger>
+            <TabsTrigger value="sos" className="flex items-center gap-1">
+              <ShieldAlert className="h-3.5 w-3.5 shrink-0" /> SOS ({sosAlerts.length})
+            </TabsTrigger>
+            <TabsTrigger value="tickets" className="flex items-center gap-1">
+              <MessageSquare className="h-3.5 w-3.5 shrink-0" /> Tickets ({supportTickets.length})
+            </TabsTrigger>
+            <TabsTrigger value="cancellations" className="flex items-center gap-1">
+              <Clock className="h-3.5 w-3.5 shrink-0" /> Cancels ({cancellations.length})
+            </TabsTrigger>
           </TabsList>
 
-          <TabsContent value="captains" className="space-y-2 mt-3">
+          <TabsContent value="captains" className="space-y-2 mt-3 animate-in fade-in">
             {captains.length === 0 && (
               <p className="text-sm text-muted-foreground text-center py-6">No captains yet</p>
             )}
@@ -160,7 +251,7 @@ export default function AdminDashboard() {
               <Card key={c.id} className="p-3">
                 <div className="flex items-start justify-between gap-3 flex-wrap">
                   <div className="flex-1 min-w-[200px]">
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
                       <div className="font-bold">{profilesMap[c.id]?.full_name ?? c.full_name ?? "Unnamed"}</div>
                       {c.verified ? (
                         <Badge className="bg-green-600">Verified</Badge>
@@ -174,13 +265,35 @@ export default function AdminDashboard() {
                         </Badge>
                       )}
                     </div>
-                    <div className="text-xs text-muted-foreground mt-1 grid grid-cols-2 gap-x-3">
+                    <div className="text-xs text-muted-foreground mt-1.5 grid grid-cols-2 gap-x-3 gap-y-1">
                       <span>📱 {profilesMap[c.id]?.phone ?? c.phone ?? "—"}</span>
-                      <span>🚗 {c.vehicle_type} · {c.vehicle_number ?? "—"}</span>
+                      <span>🚗 {c.vehicle_type === "bike" ? "🏍️ Bike" : "🛺 Auto"} · {c.vehicle_number ?? "—"}</span>
                       <span>⭐ {Number(c.rating).toFixed(1)}</span>
                       <span>✅ {c.completed_rides} · ❌ {c.cancelled_rides}</span>
-                      <span>UPI: {c.upi_id ?? "—"}</span>
-                      <span>License: {c.license_number ?? "—"}</span>
+                      <span className="col-span-2">UPI: {c.upi_id ?? "—"}</span>
+                      <span className="col-span-2">License: {c.license_number ?? "—"}</span>
+                    </div>
+                    <div className="flex items-center gap-1.5 mt-2.5">
+                      <span className="text-[11px] font-semibold text-muted-foreground mr-1">Warning Level:</span>
+                      <Button
+                        size="icon"
+                        className="h-6 w-6 rounded-full"
+                        variant="outline"
+                        onClick={() => changeWarningLevel(c.id, c.warning_level, -1)}
+                        disabled={c.warning_level === 0 || busy}
+                      >
+                        -
+                      </Button>
+                      <span className="text-xs font-bold w-4 text-center">{c.warning_level}</span>
+                      <Button
+                        size="icon"
+                        className="h-6 w-6 rounded-full"
+                        variant="outline"
+                        onClick={() => changeWarningLevel(c.id, c.warning_level, 1)}
+                        disabled={busy}
+                      >
+                        +
+                      </Button>
                     </div>
                   </div>
                   <div className="flex gap-2 flex-wrap">
@@ -205,7 +318,7 @@ export default function AdminDashboard() {
             ))}
           </TabsContent>
 
-          <TabsContent value="rides" className="space-y-2 mt-3">
+          <TabsContent value="rides" className="space-y-2 mt-3 animate-in fade-in">
             {rides.length === 0 && (
               <p className="text-sm text-muted-foreground text-center py-6">No rides yet</p>
             )}
@@ -213,25 +326,136 @@ export default function AdminDashboard() {
               <Card key={r.id} className="p-3 text-sm">
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
+                    <div className="flex items-center gap-2 mb-1.5 flex-wrap">
                       <Badge variant={statusVariant(r.status)}>{r.status}</Badge>
-                      <Badge variant="outline">{r.ride_type}</Badge>
-                      <Badge variant="outline">{r.vehicle_type}</Badge>
+                      <Badge variant="outline" className="capitalize">{r.ride_type}</Badge>
+                      <Badge variant="outline">{r.vehicle_type === "bike" ? "🏍️ Bike" : "🛺 Auto"}</Badge>
                       <span className="text-xs text-muted-foreground">
                         {new Date(r.created_at).toLocaleString()}
                       </span>
                     </div>
-                    <div className="text-xs">
+                    <div className="text-xs space-y-0.5">
                       <div className="truncate">📍 {r.pickup_address}</div>
                       <div className="truncate">🏁 {r.drop_address}</div>
                       {r.cancellation_reason && (
-                        <div className="text-destructive mt-1">Cancelled: {r.cancellation_reason}</div>
+                        <div className="text-destructive mt-1 font-medium">Reason: {r.cancellation_reason}</div>
                       )}
                     </div>
                   </div>
                   <div className="text-right shrink-0">
                     <div className="font-extrabold text-lg">₹{r.fare}</div>
                     <div className="text-xs text-muted-foreground">{r.distance_km} km</div>
+                  </div>
+                </div>
+              </Card>
+            ))}
+          </TabsContent>
+
+          <TabsContent value="sos" className="space-y-2 mt-3 animate-in fade-in">
+            {sosAlerts.length === 0 && (
+              <p className="text-sm text-muted-foreground text-center py-6">No emergency SOS alerts</p>
+            )}
+            {sosAlerts.map((alert) => (
+              <Card key={alert.id} className="p-4 border-destructive border-2 bg-destructive/5 animate-in zoom-in-95">
+                <div className="flex justify-between items-start gap-3 flex-wrap">
+                  <div className="space-y-1.5">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <Badge variant="destructive" className="animate-pulse flex items-center gap-1">
+                        <ShieldAlert className="h-3 w-3 shrink-0" /> SOS EMERGENCY
+                      </Badge>
+                      <span className="text-xs text-muted-foreground font-semibold">
+                        {new Date(alert.created_at).toLocaleString()}
+                      </span>
+                    </div>
+                    <div className="text-sm">
+                      <span className="font-bold text-muted-foreground mr-1">Alert Type:</span> {alert.alert_type}
+                    </div>
+                    <div className="text-sm flex items-start gap-1">
+                      <span className="font-bold text-muted-foreground shrink-0">GPS Location:</span> 
+                      <a href={`https://www.google.com/maps/search/?api=1&query=${alert.location}`} target="_blank" rel="noreferrer" className="text-primary underline font-medium">
+                        {alert.location}
+                      </a>
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      Ride ID: {alert.ride_id} · User: {profilesMap[alert.customer_id]?.full_name ?? "Customer"} · Phone: {profilesMap[alert.customer_id]?.phone ?? "—"}
+                    </div>
+                  </div>
+                  <Button size="sm" variant="destructive" onClick={() => resolveSosAlert(alert.id)} disabled={busy} className="font-bold">
+                    Mark Resolved
+                  </Button>
+                </div>
+              </Card>
+            ))}
+          </TabsContent>
+
+          <TabsContent value="tickets" className="space-y-2 mt-3 animate-in fade-in">
+            {supportTickets.length === 0 && (
+              <p className="text-sm text-muted-foreground text-center py-6">No support tickets</p>
+            )}
+            {supportTickets.map((t) => (
+              <Card key={t.id} className="p-3">
+                <div className="flex justify-between items-start gap-3">
+                  <div className="space-y-1.5">
+                    <div className="flex items-center gap-2">
+                      <Badge variant={t.status === "open" ? "destructive" : "secondary"} className="capitalize">
+                        {t.status}
+                      </Badge>
+                      <span className="text-xs text-muted-foreground font-medium">
+                        {new Date(t.created_at).toLocaleString()}
+                      </span>
+                    </div>
+                    <div className="text-sm font-semibold">{t.issue}</div>
+                    <div className="text-xs text-muted-foreground">
+                      Submitted by: {profilesMap[t.user_id]?.full_name ?? "User"} · Contact: {profilesMap[t.user_id]?.phone ?? "—"}
+                    </div>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => toggleTicketStatus(t.id, t.status)}
+                      disabled={busy}
+                      className="font-bold"
+                    >
+                      {t.status === "open" ? "Resolve" : "Re-open"}
+                    </Button>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      onClick={() => deleteTicket(t.id)}
+                      disabled={busy}
+                      className="text-destructive hover:bg-destructive/10"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+              </Card>
+            ))}
+          </TabsContent>
+
+          <TabsContent value="cancellations" className="space-y-2 mt-3 animate-in fade-in">
+            {cancellations.length === 0 && (
+              <p className="text-sm text-muted-foreground text-center py-6">No cancellations log</p>
+            )}
+            {cancellations.map((c) => (
+              <Card key={c.id} className="p-3 text-sm">
+                <div className="flex items-start gap-2 justify-between">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <Badge variant="outline" className="capitalize bg-muted">
+                        Cancelled by: {c.cancelled_by_role}
+                      </Badge>
+                      <span className="text-xs text-muted-foreground">
+                        {new Date(c.created_at).toLocaleString()}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="font-semibold text-muted-foreground">Reason:</span> "{c.reason}"
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      Ride ID: {c.ride_id} · User: {profilesMap[c.cancelled_by]?.full_name ?? "User"}
+                    </div>
                   </div>
                 </div>
               </Card>

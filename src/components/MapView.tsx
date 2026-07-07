@@ -18,16 +18,17 @@ const pinIcon = (color: string) =>
     iconAnchor: [14, 28],
   });
 
-const captainIcon = L.divIcon({
-  className: "",
-  html: `<div style="
-    width:32px;height:32px;border-radius:8px;
-    background:hsl(48 100% 50%);border:2px solid #111;
-    display:flex;align-items:center;justify-content:center;
-    box-shadow:0 2px 8px rgba(0,0,0,.4);font-size:18px;">🛵</div>`,
-  iconSize: [32, 32],
-  iconAnchor: [16, 16],
-});
+const getCaptainIcon = (type: "bike" | "auto" = "bike") =>
+  L.divIcon({
+    className: "",
+    html: `<div style="
+      width:32px;height:32px;border-radius:8px;
+      background:hsl(48 100% 50%);border:2px solid #111;
+      display:flex;align-items:center;justify-content:center;
+      box-shadow:0 2px 8px rgba(0,0,0,.4);font-size:18px;">${type === "bike" ? "🏍️" : "🛺"}</div>`,
+    iconSize: [32, 32],
+    iconAnchor: [16, 16],
+  });
 
 type Pt = { lat: number; lng: number };
 
@@ -55,7 +56,7 @@ export function MapView({
   center: Pt;
   pickup?: Pt | null;
   drop?: Pt | null;
-  captains?: Pt[];
+  captains?: { lat: number; lng: number; vehicle_type?: "bike" | "auto" }[];
   route?: [number, number][] | null;
 }) {
   const fitPoints: Pt[] = [];
@@ -78,7 +79,7 @@ export function MapView({
       {pickup && <Marker position={[pickup.lat, pickup.lng]} icon={pinIcon("hsl(48 100% 50%)")} />}
       {drop && <Marker position={[drop.lat, drop.lng]} icon={pinIcon("hsl(0 0% 8%)")} />}
       {captains.map((c, i) => (
-        <Marker key={i} position={[c.lat, c.lng]} icon={captainIcon} />
+        <Marker key={i} position={[c.lat, c.lng]} icon={getCaptainIcon(c.vehicle_type)} />
       ))}
       {route && route.length > 1 ? (
         <Polyline positions={route} pathOptions={{ color: "hsl(48, 100%, 45%)", weight: 5, opacity: 0.85 }} />
