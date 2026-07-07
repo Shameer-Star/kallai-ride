@@ -212,23 +212,6 @@ export default function AdminDashboard() {
   if (!user) return <Navigate to="/auth" replace />;
   if (role !== "admin") return <Navigate to="/" replace />;
 
-  const visibleSos = sosAlerts.filter((alert) => {
-    const ride = rides.find((r) => r.id === alert.ride_id);
-    if (!ride) return false;
-    if (["accepted", "started"].includes(ride.status)) return true;
-    const cap = captains.find((c) => c.id === ride.captain_id);
-    return cap?.is_online ?? false;
-  });
-
-  const visibleTickets = supportTickets.filter((t) => {
-    const cap = captains.find((c) => c.id === t.user_id);
-    if (cap) return cap.is_online;
-    const activeCustomerRide = rides.some(
-      (r) => r.customer_id === t.user_id && ["accepted", "started"].includes(r.status)
-    );
-    return activeCustomerRide;
-  });
-
   return (
     <div className="flex flex-col min-h-screen">
       <AppHeader />
@@ -248,15 +231,9 @@ export default function AdminDashboard() {
         </div>
 
         <Tabs defaultValue="captains" className="w-full">
-          <TabsList className="grid grid-cols-5 w-full h-11">
+          <TabsList className="grid grid-cols-3 w-full h-11">
             <TabsTrigger value="captains">Captains ({captains.length})</TabsTrigger>
             <TabsTrigger value="rides">Rides ({rides.length})</TabsTrigger>
-            <TabsTrigger value="sos" className="flex items-center gap-1">
-              <ShieldAlert className="h-3.5 w-3.5 shrink-0" /> SOS ({visibleSos.length})
-            </TabsTrigger>
-            <TabsTrigger value="tickets" className="flex items-center gap-1">
-              <MessageSquare className="h-3.5 w-3.5 shrink-0" /> Tickets ({visibleTickets.length})
-            </TabsTrigger>
             <TabsTrigger value="cancellations" className="flex items-center gap-1">
               <Clock className="h-3.5 w-3.5 shrink-0" /> Cancels ({cancellations.length})
             </TabsTrigger>
@@ -365,91 +342,6 @@ export default function AdminDashboard() {
                     <div className="font-extrabold text-lg">₹{r.fare}</div>
                     <div className="text-xs text-muted-foreground">{r.distance_km} km</div>
                   </div>
-                </div>
-              </Card>
-            ))}
-          </TabsContent>
-
-          <TabsContent value="sos" className="space-y-2 mt-3 animate-in fade-in">
-            {visibleSos.length === 0 && (
-              <p className="text-sm text-muted-foreground text-center py-6">No emergency SOS alerts</p>
-            )}
-            {visibleSos.map((alert) => (
-              <Card key={alert.id} className="p-4 border-destructive/30 border-2 bg-destructive/5 animate-in zoom-in-95 flex flex-col justify-between">
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <Badge variant="destructive" className="animate-pulse flex items-center gap-1">
-                      <ShieldAlert className="h-3 w-3 shrink-0" /> SOS EMERGENCY
-                    </Badge>
-                    <span className="text-xs text-muted-foreground font-semibold">
-                      {new Date(alert.created_at).toLocaleString()}
-                    </span>
-                  </div>
-                  <div className="space-y-1 mt-1">
-                    <div className="text-sm">
-                      <span className="font-bold text-muted-foreground mr-1">Alert Type:</span> {alert.alert_type}
-                    </div>
-                    <div className="text-sm flex items-start gap-1">
-                      <span className="font-bold text-muted-foreground shrink-0">GPS Location:</span> 
-                      <a href={`https://www.google.com/maps/search/?api=1&query=${alert.location}`} target="_blank" rel="noreferrer" className="text-primary underline font-medium">
-                        {alert.location}
-                      </a>
-                    </div>
-                    <div className="text-xs text-muted-foreground">
-                      Ride ID: {alert.ride_id} · User: {profilesMap[alert.customer_id]?.full_name ?? "Customer"} · Phone: {profilesMap[alert.customer_id]?.phone ?? "—"}
-                    </div>
-                  </div>
-                </div>
-                <div className="border-t border-destructive/20 mt-3 pt-3 flex justify-end">
-                  <Button size="sm" variant="destructive" onClick={() => resolveSosAlert(alert.id)} disabled={busy} className="font-bold">
-                    Mark Resolved
-                  </Button>
-                </div>
-              </Card>
-            ))}
-          </TabsContent>
-
-          <TabsContent value="tickets" className="space-y-2 mt-3 animate-in fade-in">
-            {visibleTickets.length === 0 && (
-              <p className="text-sm text-muted-foreground text-center py-6">No support tickets</p>
-            )}
-            {visibleTickets.map((t) => (
-              <Card key={t.id} className="p-4 flex flex-col justify-between">
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <Badge variant={t.status === "open" ? "destructive" : "secondary"} className="capitalize">
-                      {t.status}
-                    </Badge>
-                    <span className="text-xs text-muted-foreground font-medium">
-                      {new Date(t.created_at).toLocaleString()}
-                    </span>
-                  </div>
-                  <div className="space-y-1 mt-1">
-                    <div className="text-sm font-semibold">{t.issue}</div>
-                    <div className="text-xs text-muted-foreground">
-                      Submitted by: {profilesMap[t.user_id]?.full_name ?? "User"} · Contact: {profilesMap[t.user_id]?.phone ?? "—"}
-                    </div>
-                  </div>
-                </div>
-                <div className="border-t mt-3 pt-3 flex justify-end gap-2 items-center">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => toggleTicketStatus(t.id, t.status)}
-                    disabled={busy}
-                    className="font-bold h-9"
-                  >
-                    {t.status === "open" ? "Resolve" : "Re-open"}
-                  </Button>
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    onClick={() => deleteTicket(t.id)}
-                    disabled={busy}
-                    className="text-destructive hover:bg-destructive/10 h-9 w-9 shrink-0"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
                 </div>
               </Card>
             ))}

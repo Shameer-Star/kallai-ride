@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { AlertTriangle } from "lucide-react";
 
 const CUSTOMER_REASONS = [
+  "Captain did not arrive",
   "Captain is too far",
   "Wrong pickup location",
   "Captain not moving",
