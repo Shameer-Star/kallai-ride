@@ -76,7 +76,7 @@ type Ride = {
   item_description: string | null;
 };
 
-const DEFAULT_CENTER: Pt = { lat: 11.7401, lng: 78.9609 };
+const DEFAULT_CENTER: Pt = { lat: 11.7880009, lng: 79.1562643 };
 const ALERT_TIMEOUT_SEC = 60;
 
 export default function CaptainDashboard() {

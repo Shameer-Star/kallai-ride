@@ -36,7 +36,7 @@ type Ride = {
   otp: string | null;
 };
 
-const DEFAULT_CENTER: Pt = { lat: 11.7401, lng: 78.9609 };
+const DEFAULT_CENTER: Pt = { lat: 11.7880009, lng: 79.1562643 };
 const EMPTY_PARCEL: ParcelDetails = {
   sender_name: "",
   sender_phone: "",

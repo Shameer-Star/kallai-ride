@@ -42,15 +42,15 @@ async function fetchNominatim(
 export const LOCAL_PLACES: GeoPlace[] = [
   {
     display_name: "Adhaiyur, Kallakurichi, Tamil Nadu, India",
-    lat: 11.7645,
-    lng: 78.9812,
+    lat: 11.7880009,
+    lng: 79.1562643,
     keywords: ["adhaiyur", "adaiyur", "அடையூர்"]
   },
   {
-    display_name: "Adhaiyur (near Rishivandiyam), Kallakurichi, Tamil Nadu, India",
-    lat: 11.7645,
-    lng: 78.9812,
-    keywords: ["adhaiyur near rishivandiyam", "adhaiyur near rishivndiyam", "ரிஷிவந்தியம் அருகில் அடையூர்"]
+    display_name: "Eraiyur, Kallakurichi, Tamil Nadu, India",
+    lat: 11.7825451,
+    lng: 79.1971742,
+    keywords: ["eraiyur", "erayur", "இறையூர்"]
   },
   {
     display_name: "Rishivandiyam, Kallakurichi, Tamil Nadu, India",
@@ -63,12 +63,6 @@ export const LOCAL_PLACES: GeoPlace[] = [
     lat: 11.7454,
     lng: 79.0838,
     keywords: ["thiyagadurugam", "thyagadurugam", "தியாகதுருகம்"]
-  },
-  {
-    display_name: "Eraiyur, Kallakurichi, Tamil Nadu, India",
-    lat: 11.6441,
-    lng: 79.0305,
-    keywords: ["eraiyur", "erayur", "இறையூர்"]
   },
   {
     display_name: "Ulundurpettai, Kallakurichi, Tamil Nadu, India",
