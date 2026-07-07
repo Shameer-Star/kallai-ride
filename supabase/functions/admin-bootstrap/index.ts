@@ -1,8 +1,8 @@
-// Bootstrap / reset the Kallai Ride admin auth user using the service role.
+// Bootstrap / reset the Adhaiyur Ride admin auth user using the service role.
 // Validates a hardcoded passcode before doing anything.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 
-const ADMIN_EMAIL = "kallairideadmin@kallai.ride";
+const ADMIN_EMAIL = "admin@adhaiyur.ride";
 const ADMIN_PASSCODE = "ride123";
 
 const corsHeaders = {
@@ -38,7 +38,7 @@ Deno.serve(async (req) => {
         email: ADMIN_EMAIL,
         password: ADMIN_PASSCODE,
         email_confirm: true,
-        user_metadata: { full_name: "Kallai Ride Admin", role: "customer" },
+        user_metadata: { full_name: "Adhaiyur Ride Admin", role: "customer" },
       });
       if (createErr) throw createErr;
       userId = created.user!.id;

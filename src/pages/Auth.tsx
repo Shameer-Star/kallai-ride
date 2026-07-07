@@ -11,7 +11,7 @@ import { Logo } from "@/components/Logo";
 import { toast } from "sonner";
 import { Bike, User, Shield, Eye, EyeOff } from "lucide-react";
 
-const ADMIN_EMAIL = "kallairideadmin@kallai.ride";
+const ADMIN_EMAIL = "admin@adhaiyur.ride";
 
 export default function Auth() {
   const navigate = useNavigate();
@@ -103,7 +103,8 @@ export default function Auth() {
 
   async function handleAdminLogin(e: React.FormEvent) {
     e.preventDefault();
-    if (adminUser.trim() !== "kallairideadmin") {
+    const username = adminUser.trim().toLowerCase();
+    if (username !== "adhaiyurrideadmin" && username !== "kallairideadmin") {
       toast.error("Invalid admin username");
       return;
     }
@@ -125,11 +126,26 @@ export default function Auth() {
         console.warn("Could not invoke admin-bootstrap edge function, trying direct sign in:", e);
       }
 
-      // Now sign in normally
-      const { error: signInErr } = await supabase.auth.signInWithPassword({
-        email: ADMIN_EMAIL,
+      // Now sign in normally, checking both emails to prevent lockouts
+      let emailToUse = "admin@adhaiyur.ride";
+      if (username === "kallairideadmin") {
+        emailToUse = "kallairideadmin@kallai.ride";
+      }
+
+      let { error: signInErr } = await supabase.auth.signInWithPassword({
+        email: emailToUse,
         password: adminPass,
       });
+
+      if (signInErr && emailToUse === "admin@adhaiyur.ride") {
+        // Fallback to old admin email if the Supabase instance hasn't updated its default boot admin
+        const fallback = await supabase.auth.signInWithPassword({
+          email: "kallairideadmin@kallai.ride",
+          password: adminPass,
+        });
+        signInErr = fallback.error;
+      }
+
       if (signInErr) throw signInErr;
 
       toast.success("Admin access granted");
@@ -157,10 +173,10 @@ export default function Auth() {
           </h1>
           <p className="text-sm text-muted-foreground mb-6">
             {mode === "signin"
-              ? "Welcome back to Adhaiyu Ride"
+              ? "Welcome back to Adhaiyur Ride"
               : mode === "forgot"
-              ? "Reset your Adhaiyu Ride password"
-              : "Create your Adhaiyu Ride account"}
+              ? "Reset your Adhaiyur Ride password"
+              : "Create your Adhaiyur Ride account"}
           </p>
 
           {mode !== "forgot" ? (
@@ -312,7 +328,7 @@ export default function Auth() {
                   </div>
                   <div className="space-y-1.5">
                     <Label>Admin Username</Label>
-                    <Input required value={adminUser} onChange={(e) => setAdminUser(e.target.value)} placeholder="kallairideadmin" autoComplete="username" />
+                     <Input required value={adminUser} onChange={(e) => setAdminUser(e.target.value)} placeholder="adhaiyurrideadmin" autoComplete="username" />
                   </div>
                   <div className="space-y-1.5">
                     <Label>Admin Password</Label>

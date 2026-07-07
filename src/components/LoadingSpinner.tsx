@@ -8,7 +8,7 @@ interface LoadingSpinnerProps {
 
 export function LoadingSpinner({
   fullScreen = true,
-  message = "Loading Kallai Rapido",
+  message = "Loading Adhaiyur Ride",
   messageTa = "வண்டி தயார் செய்யப்படுகிறது...",
 }: LoadingSpinnerProps) {
   const [dots, setDots] = useState("");
@@ -34,12 +34,8 @@ export function LoadingSpinner({
         <div className="absolute w-24 h-24 rounded-full border-4 border-transparent border-t-primary border-r-primary animate-spin duration-700" />
 
         {/* Brand Logo in the center */}
-        <div className="relative w-16 h-16 rounded-2xl bg-card border-2 shadow-lg flex items-center justify-center p-2 animate-pulse overflow-hidden">
-          <img
-            src="/logo.png"
-            alt="Kallai Rapido Logo"
-            className="w-full h-full object-contain"
-          />
+        <div className="relative w-16 h-16 rounded-2xl bg-primary border-2 shadow-lg flex items-center justify-center p-2 animate-pulse overflow-hidden">
+          <span className="text-white text-2xl font-black tracking-tighter animate-bounce select-none">A</span>
         </div>
       </div>
       

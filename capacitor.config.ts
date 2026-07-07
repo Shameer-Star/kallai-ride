@@ -1,8 +1,8 @@
 import { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
-  appId: 'com.kallai.rapido',
-  appName: 'Kallai Rapido',
+  appId: 'com.adhaiyur.ride',
+  appName: 'Adhaiyur Ride',
   webDir: 'dist',
   server: {
     androidScheme: 'https'

@@ -26,9 +26,47 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [role, setRole] = useState<AppRole | null>(null);
   const [loading, setLoading] = useState(true);
 
+  async function fetchRole(userId: string) {
+    try {
+      const { data, error } = await supabase
+        .from("user_roles")
+        .select("role")
+        .eq("user_id", userId)
+        .maybeSingle();
+      if (error) throw error;
+      return (data?.role as AppRole) ?? null;
+    } catch (err) {
+      console.error("fetchRole error:", err);
+      return null;
+    }
+  }
+
   useEffect(() => {
-    // Subscribe FIRST, then check session
+    let active = true;
+
+    async function checkUser() {
+      try {
+        const { data: { session: sess } } = await supabase.auth.getSession();
+        if (!active) return;
+        setSession(sess);
+        setUser(sess?.user ?? null);
+        if (sess?.user) {
+          const userRole = await fetchRole(sess.user.id);
+          if (active) setRole(userRole);
+        } else {
+          if (active) setRole(null);
+        }
+      } catch (err) {
+        console.error("Session initialization error:", err);
+      } finally {
+        if (active) setLoading(false);
+      }
+    }
+
+    checkUser();
+
     const { data: sub } = supabase.auth.onAuthStateChange(async (event, sess) => {
+      if (!active) return;
       if (event === "PASSWORD_RECOVERY") {
         window.location.hash = ""; // Clear hash
         window.location.pathname = "/reset-password";
@@ -39,41 +77,37 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(sess?.user ?? null);
       if (sess?.user) {
         setLoading(true);
-        await fetchRole(sess.user.id);
+        const userRole = await fetchRole(sess.user.id);
+        if (active) {
+          setRole(userRole);
+          setLoading(false);
+        }
       } else {
-        setRole(null);
+        if (active) {
+          setRole(null);
+          setLoading(false);
+        }
       }
-      setLoading(false);
     });
 
-    supabase.auth.getSession().then(async ({ data: { session: sess } }) => {
-      setSession(sess);
-      setUser(sess?.user ?? null);
-      if (sess?.user) {
-        await fetchRole(sess.user.id);
-      } else {
-        setRole(null);
-      }
-      setLoading(false);
-    });
-
-    return () => sub.subscription.unsubscribe();
+    return () => {
+      active = false;
+      sub.subscription.unsubscribe();
+    };
   }, []);
 
-  async function fetchRole(userId: string) {
-    const { data } = await supabase
-      .from("user_roles")
-      .select("role")
-      .eq("user_id", userId)
-      .maybeSingle();
-    setRole((data?.role as AppRole) ?? null);
-  }
-
   async function signOut() {
-    await supabase.auth.signOut();
-    setSession(null);
-    setUser(null);
-    setRole(null);
+    try {
+      setLoading(true);
+      await supabase.auth.signOut();
+    } catch (err) {
+      console.error("SignOut error:", err);
+    } finally {
+      setSession(null);
+      setUser(null);
+      setRole(null);
+      setLoading(false);
+    }
   }
 
   return (
