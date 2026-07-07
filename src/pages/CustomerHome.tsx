@@ -831,9 +831,9 @@ function ActiveRidePanel({
         </div>
       )}
 
-      {(status === "requested" || status === "accepted") && (
+      {(status === "requested" || status === "accepted" || status === "started") && (
         <Button variant="outline" onClick={onCancelClick} className="w-full">
-          <X className="h-4 w-4 mr-1" /> {status === "accepted" ? "Cancel Driver · கேப்டனை ரத்து செய்" : "Cancel Ride · ரத்து செய்"}
+          <X className="h-4 w-4 mr-1" /> {status === "accepted" || status === "started" ? "Cancel Driver · கேப்டனை ரத்து செய்" : "Cancel Ride · ரத்து செய்"}
         </Button>
       )}
     </div>

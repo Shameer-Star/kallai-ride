@@ -37,6 +37,7 @@ export default function AdminDashboard() {
   const [busy, setBusy] = useState(false);
   const [docCaptain, setDocCaptain] = useState<any | null>(null);
   const [docUrls, setDocUrls] = useState<{ license?: string; rc?: string; photo?: string }>({});
+  const [selectedImage, setSelectedImage] = useState<string | null>(null);
 
   useEffect(() => {
     if (!user || role !== "admin") return;
@@ -395,9 +396,9 @@ export default function AdminDashboard() {
                   <div key={k}>
                     <div className="font-semibold capitalize mb-1">{k}</div>
                     {docUrls[k] ? (
-                      <a href={docUrls[k]} target="_blank" rel="noreferrer">
-                        <img src={docUrls[k]} alt={k} className="max-h-64 rounded border" />
-                      </a>
+                      <div onClick={() => setSelectedImage(docUrls[k]!)} className="cursor-pointer inline-block">
+                        <img src={docUrls[k]} alt={k} className="max-h-64 rounded border hover:opacity-80 transition-opacity" />
+                      </div>
                     ) : (
                       <div className="text-muted-foreground text-xs">Not uploaded</div>
                     )}
@@ -415,6 +416,14 @@ export default function AdminDashboard() {
                   )}
                 </div>
               </div>
+            )}
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={!!selectedImage} onOpenChange={(open) => !open && setSelectedImage(null)}>
+          <DialogContent className="max-w-4xl w-fit p-1 bg-transparent border-none shadow-none flex justify-center">
+            {selectedImage && (
+              <img src={selectedImage} alt="Document preview" className="max-h-[90vh] max-w-[90vw] object-contain rounded-lg" />
             )}
           </DialogContent>
         </Dialog>
