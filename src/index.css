@@ -102,3 +102,64 @@
   font-size: 10px !important;
   background: hsl(var(--background) / 0.8) !important;
 }
+
+/* Adhaiyur Ride Premium Design utilities & Micro-animations */
+.glass-panel {
+  background: rgba(255, 255, 255, 0.75) !important;
+  backdrop-filter: blur(16px) saturate(180%);
+  -webkit-backdrop-filter: blur(16px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.25) !important;
+}
+.dark .glass-panel {
+  background: rgba(18, 18, 18, 0.75) !important;
+  backdrop-filter: blur(16px) saturate(180%);
+  -webkit-backdrop-filter: blur(16px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+}
+
+.shadow-glow {
+  box-shadow: 0 8px 30px 0 hsl(var(--primary) / 0.18) !important;
+}
+
+.hover-lift {
+  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.25s ease-in-out;
+}
+.hover-lift:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 20px -8px hsl(var(--primary) / 0.25);
+}
+
+.bounce-subtle {
+  animation: bounce-subtle-anim 2s infinite ease-in-out;
+}
+@keyframes bounce-subtle-anim {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-4px); }
+}
+
+.glow-button {
+  position: relative;
+  overflow: hidden;
+}
+.glow-button::after {
+  content: '';
+  position: absolute;
+  top: -50%;
+  left: -60%;
+  width: 25%;
+  height: 200%;
+  background: linear-gradient(
+    to right,
+    rgba(255, 255, 255, 0) 0%,
+    rgba(255, 255, 255, 0.45) 50%,
+    rgba(255, 255, 255, 0) 100%
+  );
+  transform: rotate(25deg);
+  animation: shine 3.5s infinite ease-in-out;
+}
+@keyframes shine {
+  0% { left: -60%; }
+  18% { left: 140%; }
+  100% { left: 140%; }
+}
+

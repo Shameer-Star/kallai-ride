@@ -636,7 +636,7 @@ function BookingPanel({
                   key={v}
                   type="button"
                   onClick={() => setVehicle(v)}
-                  className={`p-3 rounded-xl border-2 text-left transition-all relative overflow-hidden ${
+                  className={`p-3 rounded-xl border-2 text-left transition-all relative overflow-hidden hover-lift ${
                     vehicle === v ? "border-primary bg-primary/10 shadow-sm" : "border-border"
                   }`}
                 >
@@ -664,7 +664,7 @@ function BookingPanel({
               <Loader2 className="h-4 w-4 animate-spin mr-2" /> Calculating Fare & Route...
             </Button>
           ) : (
-            <Button onClick={onBook} disabled={booking || distanceKm === 0} className="w-full h-12 font-bold text-base">
+            <Button onClick={onBook} disabled={booking || distanceKm === 0} className="w-full h-12 font-bold text-base glow-button">
               {booking ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
               ) : (
