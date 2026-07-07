@@ -444,8 +444,8 @@ export default function CustomerHome() {
           route={route}
         />
 
-        <div className="absolute bottom-0 left-0 right-0 z-10 p-3 pointer-events-none">
-          <Card className="pointer-events-auto p-4 shadow-2xl rounded-2xl border-2 max-h-[80vh] overflow-y-auto">
+        <div className="absolute bottom-0 left-0 right-0 md:top-3 md:bottom-3 md:right-auto md:w-[420px] z-10 p-3 pointer-events-none">
+          <Card className="pointer-events-auto p-4 shadow-2xl rounded-2xl border-2 max-h-[80vh] md:max-h-full md:h-full overflow-y-auto glass-panel">
             {!activeRide ? (
               <BookingPanel
                 pickup={pickup}

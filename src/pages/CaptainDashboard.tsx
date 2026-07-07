@@ -471,8 +471,8 @@ export default function CaptainDashboard() {
         />
 
         {/* Top status strip */}
-        <div className="absolute top-3 left-3 right-3 z-10">
-          <Card className="p-3 shadow-lg flex items-center justify-between">
+        <div className="absolute top-3 left-3 right-3 md:left-auto md:right-3 md:w-80 z-10">
+          <Card className="p-3 shadow-lg flex items-center justify-between glass-panel">
             <div className="flex items-center gap-3">
               <div
                 className="h-3 w-3 rounded-full"
@@ -493,9 +493,9 @@ export default function CaptainDashboard() {
           </Card>
         </div>
 
-        {/* Bottom panel */}
-        <div className="absolute bottom-0 left-0 right-0 z-10 p-3 pointer-events-none">
-          <Card className="pointer-events-auto p-4 shadow-2xl rounded-2xl border-2 max-h-[80vh] overflow-y-auto">
+        {/* Responsive Side/Bottom panel */}
+        <div className="absolute bottom-0 left-0 right-0 md:top-3 md:bottom-3 md:right-auto md:w-[420px] z-10 p-3 pointer-events-none">
+          <Card className="pointer-events-auto p-4 shadow-2xl rounded-2xl border-2 max-h-[80vh] md:max-h-full md:h-full overflow-y-auto glass-panel">
             {pendingRequest && !activeRide ? (
               <RequestPanel
                 ride={pendingRequest}
@@ -511,6 +511,7 @@ export default function CaptainDashboard() {
                 onVerifyOtp={verifyOtpAndStart}
                 onComplete={completeRide}
                 onCancelClick={() => setCancelOpen(true)}
+                myLoc={center}
               />
             ) : (
               <EarningsPanel
@@ -625,6 +626,7 @@ function ActiveRidePanel({
   onVerifyOtp,
   onComplete,
   onCancelClick,
+  myLoc,
 }: {
   ride: Ride;
   otpInput: string;
@@ -632,12 +634,13 @@ function ActiveRidePanel({
   onVerifyOtp: () => void;
   onComplete: () => void;
   onCancelClick: () => void;
+  myLoc: Pt;
 }) {
   const dest =
     ride.status === "accepted"
       ? { lat: ride.pickup_lat, lng: ride.pickup_lng, label: "Go to pickup" }
       : { lat: ride.drop_lat, lng: ride.drop_lng, label: "Go to drop" };
-  const navUrl = `https://www.google.com/maps/dir/?api=1&origin=${center.lat},${center.lng}&destination=${dest.lat},${dest.lng}&travelmode=driving`;
+  const navUrl = `https://www.google.com/maps/dir/?api=1&origin=${myLoc.lat},${myLoc.lng}&destination=${dest.lat},${dest.lng}&travelmode=driving`;
   const isParcel = ride.ride_type === "parcel";
 
   return (
@@ -719,7 +722,7 @@ function ActiveRidePanel({
         </Button>
       )}
 
-      {ride.status === "accepted" && (
+      {(ride.status === "accepted" || ride.status === "started") && (
         <Button variant="ghost" size="sm" onClick={onCancelClick} className="w-full text-destructive">
           <X className="h-4 w-4 mr-1" /> Cancel ride
         </Button>
