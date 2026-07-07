@@ -110,8 +110,10 @@ export default function AdminDashboard() {
     for (const k of Object.keys(fields)) {
       const { bucket, path } = fields[k];
       if (path) {
-        const { data } = await supabase.storage.from(bucket).createSignedUrl(path, 600);
-        urls[k] = data?.signedUrl;
+        const { data } = supabase.storage.from(bucket).getPublicUrl(path);
+        urls[k] = data?.publicUrl ?? null;
+      } else {
+        urls[k] = null;
       }
     }
     setDocUrls(urls);
@@ -123,7 +125,7 @@ export default function AdminDashboard() {
     setBusy(false);
     if (error) toast.error(error.message);
     else {
-      toast.success(verified ? "Captain verified" : "Verification revoked");
+      toast.success(verified ? "Captain approved" : "Captain unapproved");
       refresh();
     }
   }
@@ -137,7 +139,7 @@ export default function AdminDashboard() {
     setBusy(false);
     if (error) toast.error(error.message);
     else {
-      toast.warning("Captain suspended");
+      toast.warning("Captain blocked");
       refresh();
     }
   }
@@ -210,6 +212,23 @@ export default function AdminDashboard() {
   if (!user) return <Navigate to="/auth" replace />;
   if (role !== "admin") return <Navigate to="/" replace />;
 
+  const visibleSos = sosAlerts.filter((alert) => {
+    const ride = rides.find((r) => r.id === alert.ride_id);
+    if (!ride) return false;
+    if (["accepted", "started"].includes(ride.status)) return true;
+    const cap = captains.find((c) => c.id === ride.captain_id);
+    return cap?.is_online ?? false;
+  });
+
+  const visibleTickets = supportTickets.filter((t) => {
+    const cap = captains.find((c) => c.id === t.user_id);
+    if (cap) return cap.is_online;
+    const activeCustomerRide = rides.some(
+      (r) => r.customer_id === t.user_id && ["accepted", "started"].includes(r.status)
+    );
+    return activeCustomerRide;
+  });
+
   return (
     <div className="flex flex-col min-h-screen">
       <AppHeader />
@@ -233,10 +252,10 @@ export default function AdminDashboard() {
             <TabsTrigger value="captains">Captains ({captains.length})</TabsTrigger>
             <TabsTrigger value="rides">Rides ({rides.length})</TabsTrigger>
             <TabsTrigger value="sos" className="flex items-center gap-1">
-              <ShieldAlert className="h-3.5 w-3.5 shrink-0" /> SOS ({sosAlerts.length})
+              <ShieldAlert className="h-3.5 w-3.5 shrink-0" /> SOS ({visibleSos.length})
             </TabsTrigger>
             <TabsTrigger value="tickets" className="flex items-center gap-1">
-              <MessageSquare className="h-3.5 w-3.5 shrink-0" /> Tickets ({supportTickets.length})
+              <MessageSquare className="h-3.5 w-3.5 shrink-0" /> Tickets ({visibleTickets.length})
             </TabsTrigger>
             <TabsTrigger value="cancellations" className="flex items-center gap-1">
               <Clock className="h-3.5 w-3.5 shrink-0" /> Cancels ({cancellations.length})
@@ -254,7 +273,7 @@ export default function AdminDashboard() {
                     <div className="flex items-center gap-2 flex-wrap">
                       <div className="font-bold">{profilesMap[c.id]?.full_name ?? c.full_name ?? "Unnamed"}</div>
                       {c.verified ? (
-                        <Badge className="bg-green-600">Verified</Badge>
+                        <Badge className="bg-green-600">Approved</Badge>
                       ) : (
                         <Badge variant="outline">Pending</Badge>
                       )}
@@ -352,10 +371,10 @@ export default function AdminDashboard() {
           </TabsContent>
 
           <TabsContent value="sos" className="space-y-2 mt-3 animate-in fade-in">
-            {sosAlerts.length === 0 && (
+            {visibleSos.length === 0 && (
               <p className="text-sm text-muted-foreground text-center py-6">No emergency SOS alerts</p>
             )}
-            {sosAlerts.map((alert) => (
+            {visibleSos.map((alert) => (
               <Card key={alert.id} className="p-4 border-destructive/30 border-2 bg-destructive/5 animate-in zoom-in-95 flex flex-col justify-between">
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
@@ -391,10 +410,10 @@ export default function AdminDashboard() {
           </TabsContent>
 
           <TabsContent value="tickets" className="space-y-2 mt-3 animate-in fade-in">
-            {supportTickets.length === 0 && (
+            {visibleTickets.length === 0 && (
               <p className="text-sm text-muted-foreground text-center py-6">No support tickets</p>
             )}
-            {supportTickets.map((t) => (
+            {visibleTickets.map((t) => (
               <Card key={t.id} className="p-4 flex flex-col justify-between">
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">

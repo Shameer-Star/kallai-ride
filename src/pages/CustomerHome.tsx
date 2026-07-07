@@ -142,7 +142,7 @@ export default function CustomerHome() {
       });
       if (cancelled || !data) return;
       const pts: Pt[] = (data as any[])
-        .filter((c) => c.current_lat != null && c.current_lng != null)
+        .filter((c) => c.current_lat != null && c.current_lng != null && c.is_online === true)
         .map((c) => ({ lat: Number(c.current_lat), lng: Number(c.current_lng) }));
       setNearbyCaptains(pts);
     }
