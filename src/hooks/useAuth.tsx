@@ -92,14 +92,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setSession(sess);
       setUser(sess?.user ?? null);
       if (sess?.user) {
+        // Show loading spinner on fresh logins where no role is cached yet
+        const hasCachedRole = !!localStorage.getItem(`role_${sess.user.id}`);
+        if (!hasCachedRole) {
+          setLoading(true);
+        }
         try {
           const userRole = await fetchRole(sess.user.id);
           if (active) setRole(userRole);
         } catch (e) {
           console.error("Auth state change fetchRole error:", e);
+        } finally {
+          if (active) setLoading(false);
         }
       } else {
-        if (active) setRole(null);
+        if (active) {
+          setRole(null);
+          setLoading(false);
+        }
       }
     });
 
