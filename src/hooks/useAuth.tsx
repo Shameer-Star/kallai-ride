@@ -34,7 +34,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         .eq("user_id", userId)
         .maybeSingle();
       if (error) throw error;
-      return (data?.role as AppRole) ?? null;
+      const resolvedRole = (data?.role as AppRole) ?? null;
+      if (resolvedRole) {
+        localStorage.setItem(`role_${userId}`, resolvedRole);
+      } else {
+        localStorage.removeItem(`role_${userId}`);
+      }
+      return resolvedRole;
     } catch (err) {
       console.error("fetchRole error:", err);
       return null;
@@ -51,8 +57,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setSession(sess);
         setUser(sess?.user ?? null);
         if (sess?.user) {
+          // Try to load cached role from localStorage for 0ms load delay
+          const cached = localStorage.getItem(`role_${sess.user.id}`);
+          if (cached && active) {
+            setRole(cached as AppRole);
+            setLoading(false); // Transition instantly to the route
+          }
+          
+          // Revalidate in background to check if the role changed
           const userRole = await fetchRole(sess.user.id);
-          if (active) setRole(userRole);
+          if (active) {
+            setRole(userRole);
+          }
         } else {
           if (active) setRole(null);
         }
@@ -95,6 +111,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   async function signOut() {
     try {
+      if (user) {
+        localStorage.removeItem(`role_${user.id}`);
+      }
       await supabase.auth.signOut();
     } catch (err) {
       console.error("SignOut error:", err);
