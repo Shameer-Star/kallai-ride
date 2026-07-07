@@ -76,17 +76,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setSession(sess);
       setUser(sess?.user ?? null);
       if (sess?.user) {
-        setLoading(true);
-        const userRole = await fetchRole(sess.user.id);
-        if (active) {
-          setRole(userRole);
-          setLoading(false);
+        try {
+          const userRole = await fetchRole(sess.user.id);
+          if (active) setRole(userRole);
+        } catch (e) {
+          console.error("Auth state change fetchRole error:", e);
         }
       } else {
-        if (active) {
-          setRole(null);
-          setLoading(false);
-        }
+        if (active) setRole(null);
       }
     });
 
@@ -98,7 +95,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   async function signOut() {
     try {
-      setLoading(true);
       await supabase.auth.signOut();
     } catch (err) {
       console.error("SignOut error:", err);
@@ -106,7 +102,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setSession(null);
       setUser(null);
       setRole(null);
-      setLoading(false);
     }
   }
 
