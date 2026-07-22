@@ -3,4 +3,10 @@ Allow: /
 Disallow: /admin
 Disallow: /reset-password
 
+User-agent: Googlebot
+Allow: /
+
+User-agent: Googlebot-Mobile
+Allow: /
+
 Sitemap: https://adhaiyur-ride.vercel.app/sitemap.xml
