@@ -22,6 +22,7 @@ import {
   MessageSquare,
   Clock,
   Trash2,
+  Search,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -37,7 +38,10 @@ export default function AdminDashboard() {
   const [busy, setBusy] = useState(false);
   const [docCaptain, setDocCaptain] = useState<any | null>(null);
   const [docUrls, setDocUrls] = useState<{ license?: string; rc?: string; photo?: string }>({});
+  const [loadingDocs, setLoadingDocs] = useState(false);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  const [captainSearch, setCaptainSearch] = useState("");
+  const [rideSearch, setRideSearch] = useState("");
 
   useEffect(() => {
     if (!user || role !== "admin") return;
@@ -102,22 +106,48 @@ export default function AdminDashboard() {
 
   async function openDocs(c: any) {
     setDocCaptain(c);
-    const fields: Record<string, { bucket: string; path: string | null }> = {
-      license: { bucket: "licenses", path: c.license_url },
-      rc: { bucket: "vehicle-documents", path: c.rc_url },
-      photo: { bucket: "profile-images", path: c.photo_url },
+    setDocUrls({});
+    setLoadingDocs(true);
+    const docFields = {
+      license: { path: c.license_url, privateBucket: "licenses" },
+      rc: { path: c.rc_url, privateBucket: "vehicle-documents" },
+      photo: { path: c.photo_url, privateBucket: "profile-images" },
     };
     const urls: any = {};
-    for (const k of Object.keys(fields)) {
-      const { bucket, path } = fields[k];
-      if (path) {
-        const { data } = supabase.storage.from(bucket).getPublicUrl(path);
-        urls[k] = data?.publicUrl ?? null;
-      } else {
+    for (const k of Object.keys(docFields)) {
+      const { path, privateBucket } = docFields[k as keyof typeof docFields];
+      if (!path) {
         urls[k] = null;
+        continue;
+      }
+      // 1. Try public 'captain-docs' bucket first (public: true, no auth needed)
+      const { data: pubData } = supabase.storage.from("captain-docs").getPublicUrl(path);
+      if (pubData?.publicUrl) {
+        // Verify the URL actually resolves (HEAD request)
+        try {
+          const res = await fetch(pubData.publicUrl, { method: "HEAD" });
+          if (res.ok) {
+            urls[k] = pubData.publicUrl;
+            continue;
+          }
+        } catch { /* fallthrough to signed URL */ }
+      }
+      // 2. Fallback: try the private bucket with signed URL
+      const { data: signedData } = await supabase.storage.from(privateBucket).createSignedUrl(path, 3600);
+      if (signedData?.signedUrl) {
+        urls[k] = signedData.signedUrl;
+      } else {
+        // 3. Last resort: try captain-docs with signed URL
+        const { data: signedLegacy } = await supabase.storage.from("captain-docs").createSignedUrl(path, 3600);
+        urls[k] = signedLegacy?.signedUrl ?? null;
       }
     }
     setDocUrls(urls);
+    setLoadingDocs(false);
+    const failedDocs = Object.keys(docFields).filter(k => docFields[k as keyof typeof docFields].path && !urls[k]);
+    if (failedDocs.length > 0) {
+      toast.error(`Could not load: ${failedDocs.join(", ")}. Captain may need to re-upload.`);
+    }
   }
 
   async function toggleVerify(captainId: string, verified: boolean) {
@@ -145,6 +175,42 @@ export default function AdminDashboard() {
     }
   }
 
+  async function deleteCaptain(captainId: string) {
+    if (!confirm("Are you sure you want to delete this captain record?")) return;
+    setBusy(true);
+    const { error } = await supabase.from("captains").delete().eq("id", captainId);
+    setBusy(false);
+    if (error) toast.error(error.message);
+    else {
+      toast.success("Captain deleted");
+      refresh();
+    }
+  }
+
+  async function deleteRide(rideId: string) {
+    if (!confirm("Are you sure you want to delete this ride?")) return;
+    setBusy(true);
+    const { error } = await supabase.from("rides").delete().eq("id", rideId);
+    setBusy(false);
+    if (error) toast.error(error.message);
+    else {
+      toast.success("Ride deleted");
+      refresh();
+    }
+  }
+
+  async function deleteCancellation(cancelId: string) {
+    if (!confirm("Delete this cancellation record?")) return;
+    setBusy(true);
+    const { error } = await supabase.from("cancellations").delete().eq("id", cancelId);
+    setBusy(false);
+    if (error) toast.error(error.message);
+    else {
+      toast.success("Cancellation log deleted");
+      refresh();
+    }
+  }
+
   async function changeWarningLevel(captainId: string, currentLevel: number, delta: number) {
     setBusy(true);
     const nextLevel = Math.max(0, currentLevel + delta);
@@ -156,49 +222,6 @@ export default function AdminDashboard() {
     if (error) toast.error(error.message);
     else {
       toast.success(`Warning level set to ${nextLevel}`);
-      refresh();
-    }
-  }
-
-  async function toggleTicketStatus(ticketId: string, currentStatus: string) {
-    setBusy(true);
-    const nextStatus = currentStatus === "open" ? "resolved" : "open";
-    const { error } = await supabase
-      .from("support_tickets" as any)
-      .update({ status: nextStatus })
-      .eq("id", ticketId);
-    setBusy(false);
-    if (error) toast.error(error.message);
-    else {
-      toast.success(`Ticket marked as ${nextStatus}`);
-      refresh();
-    }
-  }
-
-  async function deleteTicket(ticketId: string) {
-    setBusy(true);
-    const { error } = await supabase
-      .from("support_tickets" as any)
-      .delete()
-      .eq("id", ticketId);
-    setBusy(false);
-    if (error) toast.error(error.message);
-    else {
-      toast.success("Ticket deleted");
-      refresh();
-    }
-  }
-
-  async function resolveSosAlert(alertId: string) {
-    setBusy(true);
-    const { error } = await supabase
-      .from("emergency_alerts" as any)
-      .delete()
-      .eq("id", alertId);
-    setBusy(false);
-    if (error) toast.error(error.message);
-    else {
-      toast.success("SOS Alert resolved and cleared");
       refresh();
     }
   }
@@ -241,111 +264,152 @@ export default function AdminDashboard() {
           </TabsList>
 
           <TabsContent value="captains" className="space-y-2 mt-3 animate-in fade-in">
+            <div className="relative mb-2">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <input
+                type="text"
+                placeholder="Search captains by name, phone, vehicle..."
+                value={captainSearch}
+                onChange={(e) => setCaptainSearch(e.target.value)}
+                className="w-full pl-9 pr-3 py-2 text-sm border rounded-lg bg-background"
+              />
+            </div>
             {captains.length === 0 && (
               <p className="text-sm text-muted-foreground text-center py-6">No captains yet</p>
             )}
-            {captains.map((c) => (
-              <Card key={c.id} className="p-3">
-                <div className="flex items-start justify-between gap-3 flex-wrap">
-                  <div className="flex-1 min-w-[200px]">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <div className="font-bold">{profilesMap[c.id]?.full_name ?? c.full_name ?? "Unnamed"}</div>
+            {captains
+              .filter((c) => {
+                if (!captainSearch) return true;
+                const q = captainSearch.toLowerCase();
+                const name = (profilesMap[c.id]?.full_name ?? c.full_name ?? "").toLowerCase();
+                const phone = (profilesMap[c.id]?.phone ?? c.phone ?? "").toLowerCase();
+                const vehicle = (c.vehicle_number ?? "").toLowerCase();
+                return name.includes(q) || phone.includes(q) || vehicle.includes(q);
+              })
+              .map((c) => (
+                <Card key={c.id} className="p-3">
+                  <div className="flex items-start justify-between gap-3 flex-wrap">
+                    <div className="flex-1 min-w-[200px]">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <div className="font-bold">{profilesMap[c.id]?.full_name ?? c.full_name ?? "Unnamed"}</div>
+                        {c.verified ? (
+                          <Badge className="bg-green-600">Approved</Badge>
+                        ) : (
+                          <Badge variant="outline">Pending</Badge>
+                        )}
+                        {c.is_online && <Badge className="bg-primary">Online</Badge>}
+                        {c.warning_level > 0 && (
+                          <Badge variant="destructive" className="flex items-center gap-1">
+                            <AlertTriangle className="h-3 w-3" /> {c.warning_level}
+                          </Badge>
+                        )}
+                      </div>
+                      <div className="text-xs text-muted-foreground mt-1.5 grid grid-cols-2 gap-x-3 gap-y-1">
+                        <span>📱 {profilesMap[c.id]?.phone ?? c.phone ?? "—"}</span>
+                        <span>🚗 {c.vehicle_type === "bike" ? "🏍️ Bike" : "🛺 Auto"} · {c.vehicle_number ?? "—"}</span>
+                        <span>⭐ {Number(c.rating).toFixed(1)}</span>
+                        <span>✅ {c.completed_rides} · ❌ {c.cancelled_rides}</span>
+                        <span className="col-span-2">UPI: {c.upi_id ?? "—"}</span>
+                        <span className="col-span-2">License: {c.license_number ?? "—"}</span>
+                      </div>
+                      <div className="flex items-center gap-1.5 mt-2.5">
+                        <span className="text-[11px] font-semibold text-muted-foreground mr-1">Warning Level:</span>
+                        <Button
+                          size="icon"
+                          className="h-6 w-6 rounded-full"
+                          variant="outline"
+                          onClick={() => changeWarningLevel(c.id, c.warning_level, -1)}
+                          disabled={c.warning_level === 0 || busy}
+                        >
+                          -
+                        </Button>
+                        <span className="text-xs font-bold w-4 text-center">{c.warning_level}</span>
+                        <Button
+                          size="icon"
+                          className="h-6 w-6 rounded-full"
+                          variant="outline"
+                          onClick={() => changeWarningLevel(c.id, c.warning_level, 1)}
+                          disabled={busy}
+                        >
+                          +
+                        </Button>
+                      </div>
+                    </div>
+                    <div className="flex gap-2 flex-wrap items-center">
+                      <Button size="sm" variant="secondary" onClick={() => openDocs(c)}>
+                        <FileText className="h-4 w-4 mr-1" /> Docs
+                      </Button>
                       {c.verified ? (
-                        <Badge className="bg-green-600">Approved</Badge>
+                        <Button size="sm" variant="outline" onClick={() => toggleVerify(c.id, false)} disabled={busy}>
+                          <XCircle className="h-4 w-4 mr-1" /> Revoke
+                        </Button>
                       ) : (
-                        <Badge variant="outline">Pending</Badge>
+                        <Button size="sm" onClick={() => toggleVerify(c.id, true)} disabled={busy}>
+                          <CheckCircle2 className="h-4 w-4 mr-1" /> Approve
+                        </Button>
                       )}
-                      {c.is_online && <Badge className="bg-primary">Online</Badge>}
-                      {c.warning_level > 0 && (
-                        <Badge variant="destructive" className="flex items-center gap-1">
-                          <AlertTriangle className="h-3 w-3" /> {c.warning_level}
-                        </Badge>
-                      )}
-                    </div>
-                    <div className="text-xs text-muted-foreground mt-1.5 grid grid-cols-2 gap-x-3 gap-y-1">
-                      <span>📱 {profilesMap[c.id]?.phone ?? c.phone ?? "—"}</span>
-                      <span>🚗 {c.vehicle_type === "bike" ? "🏍️ Bike" : "🛺 Auto"} · {c.vehicle_number ?? "—"}</span>
-                      <span>⭐ {Number(c.rating).toFixed(1)}</span>
-                      <span>✅ {c.completed_rides} · ❌ {c.cancelled_rides}</span>
-                      <span className="col-span-2">UPI: {c.upi_id ?? "—"}</span>
-                      <span className="col-span-2">License: {c.license_number ?? "—"}</span>
-                    </div>
-                    <div className="flex items-center gap-1.5 mt-2.5">
-                      <span className="text-[11px] font-semibold text-muted-foreground mr-1">Warning Level:</span>
-                      <Button
-                        size="icon"
-                        className="h-6 w-6 rounded-full"
-                        variant="outline"
-                        onClick={() => changeWarningLevel(c.id, c.warning_level, -1)}
-                        disabled={c.warning_level === 0 || busy}
-                      >
-                        -
+                      <Button size="sm" variant="destructive" onClick={() => suspendCaptain(c.id)} disabled={busy}>
+                        Suspend
                       </Button>
-                      <span className="text-xs font-bold w-4 text-center">{c.warning_level}</span>
-                      <Button
-                        size="icon"
-                        className="h-6 w-6 rounded-full"
-                        variant="outline"
-                        onClick={() => changeWarningLevel(c.id, c.warning_level, 1)}
-                        disabled={busy}
-                      >
-                        +
+                      <Button size="sm" variant="destructive" onClick={() => deleteCaptain(c.id)} disabled={busy}>
+                        <Trash2 className="h-4 w-4 mr-1" /> Delete
                       </Button>
                     </div>
                   </div>
-                  <div className="flex gap-2 flex-wrap">
-                    <Button size="sm" variant="secondary" onClick={() => openDocs(c)}>
-                      <FileText className="h-4 w-4 mr-1" /> Docs
-                    </Button>
-                    {c.verified ? (
-                      <Button size="sm" variant="outline" onClick={() => toggleVerify(c.id, false)} disabled={busy}>
-                        <XCircle className="h-4 w-4 mr-1" /> Revoke
-                      </Button>
-                    ) : (
-                      <Button size="sm" onClick={() => toggleVerify(c.id, true)} disabled={busy}>
-                        <CheckCircle2 className="h-4 w-4 mr-1" /> Approve
-                      </Button>
-                    )}
-                    <Button size="sm" variant="destructive" onClick={() => suspendCaptain(c.id)} disabled={busy}>
-                      Suspend
-                    </Button>
-                  </div>
-                </div>
-              </Card>
-            ))}
+                </Card>
+              ))}
           </TabsContent>
 
           <TabsContent value="rides" className="space-y-2 mt-3 animate-in fade-in">
+            <div className="relative mb-2">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <input
+                type="text"
+                placeholder="Search rides by pickup, drop, status..."
+                value={rideSearch}
+                onChange={(e) => setRideSearch(e.target.value)}
+                className="w-full pl-9 pr-3 py-2 text-sm border rounded-lg bg-background"
+              />
+            </div>
             {rides.length === 0 && (
               <p className="text-sm text-muted-foreground text-center py-6">No rides yet</p>
             )}
-            {rides.map((r) => (
-              <Card key={r.id} className="p-3 text-sm">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1.5 flex-wrap">
-                      <Badge variant={statusVariant(r.status)}>{r.status}</Badge>
-                      <Badge variant="outline" className="capitalize">{r.ride_type}</Badge>
-                      <Badge variant="outline">{r.vehicle_type === "bike" ? "🏍️ Bike" : "🛺 Auto"}</Badge>
-                      <span className="text-xs text-muted-foreground">
-                        {new Date(r.created_at).toLocaleString()}
-                      </span>
+            {rides
+              .filter((r) => {
+                if (!rideSearch) return true;
+                const q = rideSearch.toLowerCase();
+                return (r.pickup_address ?? "").toLowerCase().includes(q) || (r.drop_address ?? "").toLowerCase().includes(q) || (r.status ?? "").toLowerCase().includes(q);
+              })
+              .map((r) => (
+                <Card key={r.id} className="p-3 text-sm">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+                        <Badge variant={statusVariant(r.status)}>{r.status}</Badge>
+                        <Badge variant="outline" className="capitalize">{r.ride_type}</Badge>
+                        <Badge variant="outline">{r.vehicle_type === "bike" ? "🏍️ Bike" : "🛺 Auto"}</Badge>
+                        <span className="text-xs text-muted-foreground">
+                          {new Date(r.created_at).toLocaleString()}
+                        </span>
+                      </div>
+                      <div className="text-xs space-y-0.5">
+                        <div className="truncate">📍 {r.pickup_address}</div>
+                        <div className="truncate">🏁 {r.drop_address}</div>
+                        {r.cancellation_reason && (
+                          <div className="text-destructive mt-1 font-medium">Reason: {r.cancellation_reason}</div>
+                        )}
+                      </div>
                     </div>
-                    <div className="text-xs space-y-0.5">
-                      <div className="truncate">📍 {r.pickup_address}</div>
-                      <div className="truncate">🏁 {r.drop_address}</div>
-                      {r.cancellation_reason && (
-                        <div className="text-destructive mt-1 font-medium">Reason: {r.cancellation_reason}</div>
-                      )}
+                    <div className="text-right shrink-0 flex flex-col items-end gap-1">
+                      <div className="font-extrabold text-lg">₹{r.fare}</div>
+                      <div className="text-xs text-muted-foreground">{r.distance_km} km</div>
+                      <Button size="sm" variant="ghost" className="h-7 px-2 text-destructive" onClick={() => deleteRide(r.id)} disabled={busy}>
+                        <Trash2 className="h-3.5 w-3.5 mr-1" /> Delete
+                      </Button>
                     </div>
                   </div>
-                  <div className="text-right shrink-0">
-                    <div className="font-extrabold text-lg">₹{r.fare}</div>
-                    <div className="text-xs text-muted-foreground">{r.distance_km} km</div>
-                  </div>
-                </div>
-              </Card>
-            ))}
+                </Card>
+              ))}
           </TabsContent>
 
           <TabsContent value="cancellations" className="space-y-2 mt-3 animate-in fade-in">
@@ -364,8 +428,13 @@ export default function AdminDashboard() {
                     </span>
                   </div>
                   <div className="space-y-1 mt-1">
-                    <div>
-                      <span className="font-semibold text-muted-foreground">Reason:</span> "{c.reason}"
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <span className="font-semibold text-muted-foreground">Reason:</span> "{c.reason}"
+                      </div>
+                      <Button size="sm" variant="ghost" className="h-7 px-2 text-destructive shrink-0" onClick={() => deleteCancellation(c.id)} disabled={busy}>
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
                     </div>
                     <div className="text-xs text-muted-foreground">
                       Ride ID: {c.ride_id} · User: {profilesMap[c.cancelled_by]?.full_name ?? "User"}
@@ -395,12 +464,20 @@ export default function AdminDashboard() {
                 {(["photo", "license", "rc"] as const).map((k) => (
                   <div key={k}>
                     <div className="font-semibold capitalize mb-1">{k}</div>
-                    {docUrls[k] ? (
+                    {loadingDocs ? (
+                      <div className="flex items-center gap-2 text-muted-foreground text-xs">
+                        <Loader2 className="h-4 w-4 animate-spin" /> Loading...
+                      </div>
+                    ) : docUrls[k] ? (
                       <div onClick={() => setSelectedImage(docUrls[k]!)} className="cursor-pointer inline-block">
                         <img src={docUrls[k]} alt={k} className="max-h-64 rounded border hover:opacity-80 transition-opacity" />
                       </div>
                     ) : (
-                      <div className="text-muted-foreground text-xs">Not uploaded</div>
+                      <div className="text-muted-foreground text-xs">
+                        {docCaptain[k === "photo" ? "photo_url" : k === "license" ? "license_url" : "rc_url"]
+                          ? "⚠️ Uploaded but could not load — check storage policies"
+                          : "Not uploaded"}
+                      </div>
                     )}
                   </div>
                 ))}

@@ -59,6 +59,7 @@ export default function CustomerHome() {
   const [route, setRoute] = useState<[number, number][] | null>(null);
   const [nearbyCaptains, setNearbyCaptains] = useState<Pt[]>([]);
   const [captainLive, setCaptainLive] = useState<Pt | null>(null);
+  const [captainRoute, setCaptainRoute] = useState<[number, number][] | null>(null);
   const [activeRide, setActiveRide] = useState<Ride | null>(null);
   const [booking, setBooking] = useState(false);
   const [cancelOpen, setCancelOpen] = useState(false);
@@ -69,7 +70,7 @@ export default function CustomerHome() {
   const lastFetchedTime = useRef<number>(0);
   const lastRideRef = useRef<{ id: string; status: string } | null>(null);
 
-  // Watch user location continuously
+  // Watch user location continuously — faster with 2s maxAge
   useEffect(() => {
     if (!navigator.geolocation) {
       toast.error("Geolocation is not supported by your browser");
@@ -96,7 +97,7 @@ export default function CustomerHome() {
           console.warn("Geolocation watch error:", err.message);
         }
       },
-      { enableHighAccuracy: true, maximumAge: 5000, timeout: 10000 }
+      { enableHighAccuracy: true, maximumAge: 2000, timeout: 8000 }
     );
     return () => navigator.geolocation.clearWatch(watchId);
   }, []);
@@ -131,6 +132,7 @@ export default function CustomerHome() {
     };
   }, [pickup, drop]);
 
+  // Fetch nearby captains — poll every 5s (was 8s)
   useEffect(() => {
     if (!pickup) return;
     let cancelled = false;
@@ -148,8 +150,7 @@ export default function CustomerHome() {
       setNearbyCaptains(pts);
     }
     load();
-    // Poll every 8s for nearby captains while not on an active ride
-    const id = window.setInterval(load, 8000);
+    const id = window.setInterval(load, 5000);
     return () => {
       cancelled = true;
       window.clearInterval(id);
@@ -243,6 +244,7 @@ export default function CustomerHome() {
     const status = activeRide?.status;
     if (!capId || (status !== "accepted" && status !== "started")) {
       setCaptainLive(null);
+      setCaptainRoute(null);
       return;
     }
     let cancelled = false;
@@ -283,7 +285,7 @@ export default function CustomerHome() {
     };
   }, [activeRide?.captain_id, activeRide?.status]);
 
-  // Dynamically update active ride duration ETA from OSRM
+  // Dynamically update active ride duration ETA and live route from OSRM
   useEffect(() => {
     const target =
       activeRide?.status === "accepted"
@@ -294,12 +296,13 @@ export default function CustomerHome() {
 
     if (!captainLive || !target || !activeRide) {
       setLiveDurationSec(null);
+      setCaptainRoute(null);
       return;
     }
 
     const now = Date.now();
-    // Fetch OSRM duration at most once every 15 seconds to avoid rate limiting
-    if (now - lastFetchedTime.current < 15000) return;
+    // Fetch OSRM duration at most once every 10 seconds (was 15s)
+    if (now - lastFetchedTime.current < 10000) return;
 
     let cancelled = false;
     (async () => {
@@ -309,6 +312,7 @@ export default function CustomerHome() {
       if (r) {
         if (r.durationSec != null) setLiveDurationSec(r.durationSec);
         if (r.distanceKm != null) setLiveRouteDistKm(r.distanceKm);
+        if (r.geometry) setCaptainRoute(r.geometry);
       }
     })();
 
@@ -425,6 +429,7 @@ export default function CustomerHome() {
     });
     setCancelOpen(false);
     setActiveRide(null);
+    setCaptainRoute(null);
     toast.success("Ride cancelled");
   }
 
@@ -444,6 +449,8 @@ export default function CustomerHome() {
               : nearbyCaptains.map((pt) => ({ ...pt, vehicle_type: vehicle }))
           }
           route={route}
+          captainRoute={captainRoute}
+          userLocation={userLocation}
         />
 
         <div className="absolute bottom-0 left-0 right-0 md:top-3 md:bottom-3 md:right-auto md:w-[420px] z-10 p-3 pointer-events-none">

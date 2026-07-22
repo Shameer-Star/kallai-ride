@@ -11,6 +11,7 @@ export function EarningsBreakdown({ captainId }: { captainId: string }) {
 
   useEffect(() => {
     if (!captainId) return;
+    let cancelled = false;
     async function load() {
       const now = new Date();
       const today = new Date(now);
@@ -27,7 +28,7 @@ export function EarningsBreakdown({ captainId }: { captainId: string }) {
         .eq("status", "completed")
         .gte("completed_at", monthStart.toISOString());
 
-      if (!data) return;
+      if (cancelled || !data) return;
       const agg = { today: { rides: 0, total: 0 }, week: { rides: 0, total: 0 }, month: { rides: 0, total: 0 } };
       for (const r of data as any[]) {
         const t = new Date(r.completed_at);
@@ -46,6 +47,21 @@ export function EarningsBreakdown({ captainId }: { captainId: string }) {
       setStats(agg);
     }
     load();
+
+    // Realtime: auto-refresh earnings when rides change
+    const channel = supabase
+      .channel(`earnings-${captainId}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "rides", filter: `captain_id=eq.${captainId}` },
+        () => load()
+      )
+      .subscribe();
+
+    return () => {
+      cancelled = true;
+      supabase.removeChannel(channel);
+    };
   }, [captainId]);
 
   const cards = [

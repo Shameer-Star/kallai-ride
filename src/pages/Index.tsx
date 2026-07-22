@@ -5,7 +5,7 @@ import CaptainDashboard from "./CaptainDashboard";
 import { Loader2 } from "lucide-react";
 
 export default function Index() {
-  const { user, role, loading } = useAuth();
+  const { user, activeRole, loading } = useAuth();
 
   if (loading) {
     return (
@@ -17,7 +17,7 @@ export default function Index() {
 
   if (!user) return <Navigate to="/auth" replace />;
 
-  if (role === "admin") return <Navigate to="/admin" replace />;
-  if (role === "captain") return <CaptainDashboard />;
+  if (activeRole === "admin") return <Navigate to="/admin" replace />;
+  if (activeRole === "captain") return <CaptainDashboard />;
   return <CustomerHome />;
 }

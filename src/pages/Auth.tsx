@@ -174,10 +174,10 @@ export default function Auth() {
           </h1>
           <p className="text-sm text-muted-foreground mb-6">
             {mode === "signin"
-              ? "Welcome back to Adhaiyur Ride"
+              ? "Welcome back to Kallai Ride"
               : mode === "forgot"
-              ? "Reset your Adhaiyur Ride password"
-              : "Create your Adhaiyur Ride account"}
+              ? "Reset your Kallai Ride password"
+              : "Create your Kallai Ride account"}
           </p>
 
           {mode !== "forgot" ? (

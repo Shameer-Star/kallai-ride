@@ -9,6 +9,7 @@ import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { calcFare, haversineKm, MATCH_RADIUS_KM, VehicleType } from "@/lib/fare";
+import { getRouteDistanceKm } from "@/lib/geocode";
 import {
   CheckCircle2,
   IndianRupee,
@@ -27,6 +28,7 @@ import { OtpInput } from "@/components/OtpInput";
 import { CustomerCard } from "@/components/CustomerCard";
 import { EarningsBreakdown } from "@/components/EarningsBreakdown";
 import { LoadingSpinner } from "@/components/LoadingSpinner";
+import { PaymentQRDialog } from "@/components/PaymentQRDialog";
 
 type Pt = { lat: number; lng: number };
 type Captain = {
@@ -88,7 +90,15 @@ export default function CaptainDashboard() {
   const [todayEarnings, setTodayEarnings] = useState({ count: 0, total: 0 });
   const [otpInput, setOtpInput] = useState("");
   const [cancelOpen, setCancelOpen] = useState(false);
+  const [captainRoute, setCaptainRoute] = useState<[number, number][] | null>(null);
+  const [showPaymentQR, setShowPaymentQR] = useState(false);
+  const [completedRideForQR, setCompletedRideForQR] = useState<Ride | null>(null);
   const lastAlertedKey = useRef<string | null>(null);
+  const captainRef = useRef<Captain | null>(null);
+  const activeRideRef = useRef<Ride | null>(null);
+  // Keep refs in sync with state so realtime callbacks always see latest values
+  captainRef.current = captain;
+  activeRideRef.current = activeRide;
 
   // Load captain row (or create)
   useEffect(() => {
@@ -131,7 +141,7 @@ export default function CaptainDashboard() {
     };
   }, [user, captain?.is_online]);
 
-  // Live GPS tracking when online
+  // Live GPS tracking when online — faster updates
   useEffect(() => {
     if (!captain?.is_online || !user) return;
     if (!navigator.geolocation) return;
@@ -149,9 +159,9 @@ export default function CaptainDashboard() {
           });
         }
 
-        // 2. Throttle database updates to once every 5 seconds
+        // 2. Throttle database updates to once every 3 seconds (was 5s)
         const now = Date.now();
-        if (now - lastDbUpdateTime.current >= 5000) {
+        if (now - lastDbUpdateTime.current >= 3000) {
           lastDbUpdateTime.current = now;
           await supabase
             .from("captains")
@@ -170,18 +180,51 @@ export default function CaptainDashboard() {
           console.warn("Geolocation watch error:", err.message);
         }
       },
-      { enableHighAccuracy: true, maximumAge: 5000, timeout: 10000 }
+      { enableHighAccuracy: true, maximumAge: 2000, timeout: 8000 }
     );
     return () => navigator.geolocation.clearWatch(watchId);
   }, [captain?.is_online, user]);
 
-  // Watch for ride requests + active ride
+  // Fetch live route from captain to destination
+  const lastRouteTime = useRef<number>(0);
   useEffect(() => {
-    if (!user || !captain) return;
+    const ride = activeRide;
+    if (!ride || !center) {
+      setCaptainRoute(null);
+      return;
+    }
+    const target =
+      ride.status === "accepted"
+        ? { lat: ride.pickup_lat, lng: ride.pickup_lng }
+        : ride.status === "started"
+        ? { lat: ride.drop_lat, lng: ride.drop_lng }
+        : null;
+    if (!target) {
+      setCaptainRoute(null);
+      return;
+    }
+    const now = Date.now();
+    if (now - lastRouteTime.current < 10000) return; // Throttle to 10s
+    let cancelled = false;
+    (async () => {
+      lastRouteTime.current = now;
+      const r = await getRouteDistanceKm(center, target);
+      if (!cancelled && r) {
+        setCaptainRoute(r.geometry);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [center, activeRide?.id, activeRide?.status]);
+
+  // --- Stable data loaders (read captain from ref to avoid stale closures) ---
+  const loadFnsRef = useRef<{ loadActive: () => void; loadPending: () => void; loadEarnings: () => void } | null>(null);
+
+  // Watch for ride requests + active ride — channel depends ONLY on user (stable)
+  useEffect(() => {
+    if (!user) return;
     let cancelled = false;
 
     async function loadActive() {
-      // Note: 'otp' column is no longer granted to authenticated; we never read it client-side.
       const { data } = await supabase
         .from("rides")
         .select(
@@ -196,7 +239,6 @@ export default function CaptainDashboard() {
       if (!cancelled) {
         let activeRideRow = (data as unknown as Ride) ?? null;
         if (activeRideRow && activeRideRow.ride_type === "parcel") {
-          // Securly fetch sender/receiver phone numbers via RPC
           const { data: contacts } = await supabase.rpc("get_ride_parcel_contacts" as any, {
             _ride_id: activeRideRow.id
           });
@@ -213,21 +255,25 @@ export default function CaptainDashboard() {
     }
 
     async function loadPending() {
-      if (!captain!.is_online || !captain!.current_lat || !captain!.current_lng) {
+      const cap = captainRef.current;
+      // FIX: Once captain has an active ride, never show pending requests
+      if (activeRideRef.current) {
         setPendingRequest(null);
         return;
       }
-      // Use the safe view that excludes OTP, sender_phone, receiver_phone, customer_id
+      if (!cap || !cap.is_online || !cap.current_lat || !cap.current_lng) {
+        setPendingRequest(null);
+        return;
+      }
       const { data } = await supabase
         .from("rides_browseable" as any)
         .select("*")
-        .eq("vehicle_type", captain!.vehicle_type)
+        .eq("vehicle_type", cap.vehicle_type)
         .order("created_at", { ascending: true });
       if (cancelled || !data) return;
-      const myPt: Pt = { lat: captain!.current_lat!, lng: captain!.current_lng! };
+      const myPt: Pt = { lat: cap.current_lat!, lng: cap.current_lng! };
       const candidates = (data as any[])
         .filter((r) => {
-          // EXCLUDE rides created more than 20 minutes ago to prevent showing old bookings
           const created = new Date(r.created_at).getTime();
           const now = Date.now();
           const ageMin = (now - created) / 60000;
@@ -238,6 +284,7 @@ export default function CaptainDashboard() {
           ride: r as Ride,
           dist: haversineKm(myPt, { lat: r.pickup_lat, lng: r.pickup_lng }),
         }))
+        .filter((r) => r.dist <= MATCH_RADIUS_KM) // Only within 5km radius
         .sort((a, b) => a.dist - b.dist);
       setPendingRequest(candidates[0]?.ride ?? null);
     }
@@ -261,9 +308,15 @@ export default function CaptainDashboard() {
       if (!cancelled && data) setCaptain(data as Captain);
     }
 
-    loadActive();
-    loadPending();
-    loadEarnings();
+    // Store loaders so other effects can call them
+    loadFnsRef.current = { loadActive, loadPending, loadEarnings };
+
+    // Initial load (only if captain is already loaded)
+    if (captainRef.current) {
+      loadActive();
+      loadPending();
+      loadEarnings();
+    }
 
     const channel = supabase
       .channel(`captain-feed-${user.id}`)
@@ -289,12 +342,23 @@ export default function CaptainDashboard() {
       .subscribe();
     return () => {
       cancelled = true;
+      loadFnsRef.current = null;
       supabase.removeChannel(channel);
     };
-  }, [user, captain]);
+  }, [user]);
+
+  // Re-fetch data when captain state becomes available or key fields change
+  useEffect(() => {
+    if (!captain || !loadFnsRef.current) return;
+    loadFnsRef.current.loadActive();
+    loadFnsRef.current.loadPending();
+    loadFnsRef.current.loadEarnings();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [captain?.is_online, captain?.vehicle_type, captain?.verified]);
 
   // Play alert sound + 60s auto-reject when a new request arrives
   useEffect(() => {
+    // FIX: Never show pending alerts when there's an active ride
     if (!pendingRequest || activeRide) {
       stopAlertLoop();
       return;
@@ -387,6 +451,8 @@ export default function CaptainDashboard() {
     else {
       toast.success("Ride accepted!");
       setPendingRequest(null);
+      // Optimistic: set active ride immediately
+      setActiveRide({ ...r, captain_id: user!.id, status: "accepted" });
     }
   }
 
@@ -415,6 +481,8 @@ export default function CaptainDashboard() {
     if (data === true) {
       toast.success("Ride started!");
       setOtpInput("");
+      // Optimistic update
+      setActiveRide({ ...activeRide, status: "started" });
     } else {
       toast.error("Incorrect OTP");
     }
@@ -427,7 +495,14 @@ export default function CaptainDashboard() {
       .update({ status: "completed", completed_at: new Date().toISOString() })
       .eq("id", activeRide.id);
     if (error) toast.error(error.message);
-    else toast.success(`Ride completed! Collect ₹${activeRide.fare}`);
+    else {
+      toast.success(`Ride completed! ₹${activeRide.fare}`);
+      // Show QR payment dialog
+      setCompletedRideForQR(activeRide);
+      setShowPaymentQR(true);
+      setActiveRide(null);
+      setCaptainRoute(null);
+    }
   }
 
   async function confirmCancel(reason: string) {
@@ -450,6 +525,7 @@ export default function CaptainDashboard() {
     setCancelOpen(false);
     setActiveRide(null);
     setPendingRequest(null);
+    setCaptainRoute(null);
     toast.warning("Ride cancelled. Your rating dropped by 0.2.");
   }
 
@@ -475,6 +551,7 @@ export default function CaptainDashboard() {
           center={center}
           pickup={activeRide ? { lat: activeRide.pickup_lat, lng: activeRide.pickup_lng } : undefined}
           drop={activeRide ? { lat: activeRide.drop_lat, lng: activeRide.drop_lng } : undefined}
+          captainRoute={captainRoute}
         />
 
         {/* Top status strip */}
@@ -538,6 +615,21 @@ export default function CaptainDashboard() {
           warning={cancelWarning}
           onConfirm={confirmCancel}
         />
+
+        {/* QR Payment Dialog after ride completion */}
+        {completedRideForQR && (
+          <PaymentQRDialog
+            open={showPaymentQR}
+            onOpenChange={(v) => {
+              setShowPaymentQR(v);
+              if (!v) setCompletedRideForQR(null);
+            }}
+            fare={completedRideForQR.fare}
+            captainName={captain.full_name ?? "Captain"}
+            captainUpiId={captain.upi_id ?? ""}
+            rideId={completedRideForQR.id}
+          />
+        )}
       </div>
     </div>
   );
@@ -819,8 +911,10 @@ function DocsForm({ captain, onUpdate }: { captain: Captain; onUpdate: (c: Capta
   async function compressImage(file: File): Promise<Blob> {
     return new Promise((resolve) => {
       const img = new Image();
-      img.src = URL.createObjectURL(file);
+      const objectUrl = URL.createObjectURL(file);
+      img.src = objectUrl;
       img.onload = () => {
+        URL.revokeObjectURL(objectUrl);
         const canvas = document.createElement("canvas");
         const ctx = canvas.getContext("2d");
         if (!ctx) {
@@ -854,7 +948,10 @@ function DocsForm({ captain, onUpdate }: { captain: Captain; onUpdate: (c: Capta
           0.75
         );
       };
-      img.onerror = () => resolve(file);
+      img.onerror = () => {
+        URL.revokeObjectURL(objectUrl);
+        resolve(file);
+      };
     });
   }
 
@@ -873,18 +970,17 @@ function DocsForm({ captain, onUpdate }: { captain: Captain; onUpdate: (c: Capta
       toast("Compressing image...");
       const compressedBlob = await compressImage(file);
       
-      const bucket =
-        field === "photo_url"
-          ? "profile-images"
-          : field === "license_url"
-          ? "licenses"
-          : "vehicle-documents";
+      // Use the public 'captain-docs' bucket (works without extra RLS policies)
+      const bucket = "captain-docs";
 
-      const ext = file.name.split(".").pop();
+      const ext = "jpg"; // compressImage always outputs JPEG
       const path = `${captain.id}/${field}-${Date.now()}.${ext}`;
 
       toast("Uploading secure document...");
-      const { error } = await supabase.storage.from(bucket).upload(path, compressedBlob, { upsert: true });
+      const { error } = await supabase.storage.from(bucket).upload(path, compressedBlob, {
+        upsert: true,
+        contentType: compressedBlob.type || "image/jpeg",
+      });
       if (error) {
         toast.error(error.message);
         return;

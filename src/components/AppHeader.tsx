@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { Logo } from "./Logo";
+import { RoleSwitcher } from "./RoleSwitcher";
 import { Button } from "./ui/button";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
@@ -10,7 +11,7 @@ import { Card } from "./ui/card";
 import { toast } from "sonner";
 
 export function AppHeader() {
-  const { signOut, role, user } = useAuth();
+  const { signOut, role, activeRole, roles, user } = useAuth();
   const loc = useLocation();
   const [notifications, setNotifications] = useState<any[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
@@ -123,9 +124,10 @@ export function AppHeader() {
           <Logo size="sm" />
         </Link>
         <div className="flex items-center gap-1">
-          {role && (
+          <RoleSwitcher />
+          {activeRole && roles.length <= 1 && (
             <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-1 rounded bg-secondary text-secondary-foreground mr-1">
-              {role}
+              {activeRole}
             </span>
           )}
           <Link to="/">

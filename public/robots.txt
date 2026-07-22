@@ -1,7 +1,6 @@
 User-agent: *
 Allow: /
-Allow: /auth
 Disallow: /admin
-Disallow: /captain
+Disallow: /reset-password
 
-Sitemap: https://kallai-ride.vercel.app/sitemap.xml
+Sitemap: https://adhaiyur-ride.vercel.app/sitemap.xml

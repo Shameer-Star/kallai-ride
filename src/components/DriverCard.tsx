@@ -21,7 +21,7 @@ export function DriverCard({ captainId }: { captainId: string }) {
 
   useEffect(() => {
     let cancelled = false;
-    (async () => {
+    async function load() {
       const { data } = await supabase
         .from("captains")
         .select("id, full_name, vehicle_number, vehicle_type, rating, total_rides, photo_url, phone")
@@ -30,14 +30,39 @@ export function DriverCard({ captainId }: { captainId: string }) {
       if (cancelled) return;
       setC(data as Captain);
       if (data?.photo_url) {
+        // Try public 'captain-docs' bucket first (no auth needed)
+        const { data: pubData } = supabase.storage.from("captain-docs").getPublicUrl(data.photo_url);
+        if (pubData?.publicUrl) {
+          try {
+            const res = await fetch(pubData.publicUrl, { method: "HEAD" });
+            if (res.ok) {
+              if (!cancelled) setPhotoSigned(pubData.publicUrl);
+              return;
+            }
+          } catch { /* fallthrough */ }
+        }
+        // Fallback: try private bucket with signed URL
         const { data: signed } = await supabase.storage
           .from("profile-images")
           .createSignedUrl(data.photo_url, 600);
         if (!cancelled) setPhotoSigned(signed?.signedUrl ?? null);
       }
-    })();
+    }
+    load();
+
+    // Realtime: auto-refresh captain info when it changes
+    const channel = supabase
+      .channel(`driver-card-${captainId}`)
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "captains", filter: `id=eq.${captainId}` },
+        () => load()
+      )
+      .subscribe();
+
     return () => {
       cancelled = true;
+      supabase.removeChannel(channel);
     };
   }, [captainId]);
 

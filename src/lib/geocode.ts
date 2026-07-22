@@ -76,6 +76,12 @@ export const LOCAL_PLACES: GeoPlace[] = [
     lng: 78.9639,
     keywords: ["kallakurichi", "kallai", "கள்ளக்குறிச்சி"]
   },
+  {
+    display_name: "Elavanasur Kottai, Kallakurichi, Tamil Nadu, India",
+    lat: 11.8300,
+    lng: 79.0700,
+    keywords: ["elavanasur", "elavanasur kottai", "elavanasurkottai", "எலவனசூர் கோட்டை", "எலவனசூர்"]
+  },
 ];
 
 export async function searchPlaces(query: string, signal?: AbortSignal): Promise<GeoPlace[]> {
@@ -164,11 +170,29 @@ export async function reverseGeocode(lat: number, lng: number): Promise<string> 
   }
 }
 
+// --- LRU Route Cache for OSRM results ---
+type RouteResult = { distanceKm: number; durationSec: number; geometry: [number, number][] };
+const ROUTE_CACHE_SIZE = 30;
+const routeCache = new Map<string, { result: RouteResult; timestamp: number }>();
+
+function makeRouteKey(a: { lat: number; lng: number }, b: { lat: number; lng: number }): string {
+  // Round to 4 decimal places (~11m precision) for cache hits on nearby points
+  return `${a.lat.toFixed(4)},${a.lng.toFixed(4)}-${b.lat.toFixed(4)},${b.lng.toFixed(4)}`;
+}
+
 // Free routing via OSRM public demo server — returns distance in km and duration in seconds
 export async function getRouteDistanceKm(
   a: { lat: number; lng: number },
   b: { lat: number; lng: number }
-): Promise<{ distanceKm: number; durationSec: number; geometry: [number, number][] } | null> {
+): Promise<RouteResult | null> {
+  const key = makeRouteKey(a, b);
+  
+  // Check cache first (valid for 60 seconds)
+  const cached = routeCache.get(key);
+  if (cached && Date.now() - cached.timestamp < 60000) {
+    return cached.result;
+  }
+
   try {
     const url = `https://router.project-osrm.org/route/v1/driving/${a.lng},${a.lat};${b.lng},${b.lat}?overview=full&geometries=geojson`;
     const res = await fetch(url);
@@ -179,11 +203,20 @@ export async function getRouteDistanceKm(
     const coords: [number, number][] = route.geometry.coordinates.map(
       (c: [number, number]) => [c[1], c[0]]
     );
-    return {
+    const result: RouteResult = {
       distanceKm: route.distance / 1000,
       durationSec: route.duration ?? 0,
       geometry: coords,
     };
+
+    // Store in cache with LRU eviction
+    routeCache.set(key, { result, timestamp: Date.now() });
+    if (routeCache.size > ROUTE_CACHE_SIZE) {
+      const firstKey = routeCache.keys().next().value;
+      if (firstKey) routeCache.delete(firstKey);
+    }
+
+    return result;
   } catch {
     return null;
   }
