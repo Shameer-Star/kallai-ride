@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { AppHeader } from "@/components/AppHeader";
@@ -9,7 +9,7 @@ import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { calcFare, haversineKm, MATCH_RADIUS_KM, VehicleType } from "@/lib/fare";
-import { getRouteDistanceKm } from "@/lib/geocode";
+import { getRouteDistanceKm, getCurrentLocationAsync } from "@/lib/geocode";
 import {
   CheckCircle2,
   IndianRupee,
@@ -93,6 +93,7 @@ export default function CaptainDashboard() {
   const [captainRoute, setCaptainRoute] = useState<[number, number][] | null>(null);
   const [showPaymentQR, setShowPaymentQR] = useState(false);
   const [completedRideForQR, setCompletedRideForQR] = useState<Ride | null>(null);
+  const [customerLocation, setCustomerLocation] = useState<Pt | null>(null);
   const lastAlertedKey = useRef<string | null>(null);
   const captainRef = useRef<Captain | null>(null);
   const activeRideRef = useRef<Ride | null>(null);
@@ -185,7 +186,7 @@ export default function CaptainDashboard() {
     return () => navigator.geolocation.clearWatch(watchId);
   }, [captain?.is_online, user]);
 
-  // Fetch live route from captain to destination
+  // Fetch live route from captain to destination — throttled to 8s (reduced from 10s)
   const lastRouteTime = useRef<number>(0);
   useEffect(() => {
     const ride = activeRide;
@@ -204,7 +205,7 @@ export default function CaptainDashboard() {
       return;
     }
     const now = Date.now();
-    if (now - lastRouteTime.current < 10000) return; // Throttle to 10s
+    if (now - lastRouteTime.current < 8000) return; // Throttle to 8s (was 10s)
     let cancelled = false;
     (async () => {
       lastRouteTime.current = now;
@@ -215,6 +216,26 @@ export default function CaptainDashboard() {
     })();
     return () => { cancelled = true; };
   }, [center, activeRide?.id, activeRide?.status]);
+
+  // Fetch customer's last known location during active ride
+  useEffect(() => {
+    if (!activeRide || !activeRide.customer_id) {
+      setCustomerLocation(null);
+      return;
+    }
+    let cancelled = false;
+    async function fetchCustomerLoc() {
+      // Use pickup location as customer's location (best available)
+      if (activeRide) {
+        setCustomerLocation({
+          lat: activeRide.pickup_lat,
+          lng: activeRide.pickup_lng,
+        });
+      }
+    }
+    fetchCustomerLoc();
+    return () => { cancelled = true; };
+  }, [activeRide?.id, activeRide?.customer_id]);
 
   // --- Stable data loaders (read captain from ref to avoid stale closures) ---
   const loadFnsRef = useRef<{ loadActive: () => void; loadPending: () => void; loadEarnings: () => void } | null>(null);
@@ -544,7 +565,7 @@ export default function CaptainDashboard() {
       : undefined;
 
   return (
-    <div className="flex flex-col h-screen">
+    <div className="flex flex-col" style={{ height: "100dvh" }}>
       <AppHeader />
       <div className="relative flex-1">
         <MapView
@@ -552,6 +573,7 @@ export default function CaptainDashboard() {
           pickup={activeRide ? { lat: activeRide.pickup_lat, lng: activeRide.pickup_lng } : undefined}
           drop={activeRide ? { lat: activeRide.drop_lat, lng: activeRide.drop_lng } : undefined}
           captainRoute={captainRoute}
+          customerLocation={activeRide ? customerLocation : undefined}
         />
 
         {/* Top status strip */}

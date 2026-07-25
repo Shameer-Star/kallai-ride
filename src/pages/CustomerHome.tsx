@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { MapView } from "@/components/MapView";
@@ -7,9 +7,9 @@ import { AppHeader } from "@/components/AppHeader";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { calcFare, FARE_CONFIG, haversineKm, MATCH_RADIUS_KM, VehicleType } from "@/lib/fare";
-import { getRouteDistanceKm, reverseGeocode, GeoPlace, LOCAL_PLACES } from "@/lib/geocode";
+import { getRouteDistanceKm, reverseGeocode, getCurrentLocationAsync, GeoPlace, LOCAL_PLACES } from "@/lib/geocode";
 import { playNotificationSound } from "@/lib/alertSound";
-import { Bike, Car, Loader2, MapPin, X, CheckCircle2, Package, Users, KeyRound } from "lucide-react";
+import { Bike, Car, Loader2, MapPin, X, CheckCircle2, Package, Users, KeyRound, Crosshair } from "lucide-react";
 import { toast } from "sonner";
 import { CancellationDialog } from "@/components/CancellationDialog";
 import { ParcelForm, ParcelDetails, isParcelValid } from "@/components/ParcelForm";
@@ -67,28 +67,63 @@ export default function CustomerHome() {
   const [userLocation, setUserLocation] = useState<Pt | null>(null);
   const [liveDurationSec, setLiveDurationSec] = useState<number | null>(null);
   const [liveRouteDistKm, setLiveRouteDistKm] = useState<number | null>(null);
+  const [locating, setLocating] = useState(true); // New: show "Locating you..." overlay
   const lastFetchedTime = useRef<number>(0);
   const lastRideRef = useRef<{ id: string; status: string } | null>(null);
+  const pickupSetByGps = useRef(false); // Track if GPS already set the initial pickup
+  const userLocationRef = useRef<Pt | null>(null);
+  userLocationRef.current = userLocation;
 
-  // Watch user location continuously — faster with 2s maxAge
+  // Eager location fetch on mount — uses Promise-based helper with timeout
+  useEffect(() => {
+    let cancelled = false;
+    async function fetchInitialLocation() {
+      try {
+        const pt = await getCurrentLocationAsync(6000);
+        if (cancelled) return;
+        setUserLocation(pt);
+        setCenter(pt);
+        if (!pickupSetByGps.current) {
+          pickupSetByGps.current = true;
+          const addr = await reverseGeocode(pt.lat, pt.lng);
+          if (!cancelled) {
+            setPickup({ pt, address: addr });
+          }
+        }
+      } catch {
+        // GPS failed/timed out — use default center, user can set manually
+        console.warn("Initial location fetch failed, using default center");
+      } finally {
+        if (!cancelled) setLocating(false);
+      }
+    }
+    fetchInitialLocation();
+    return () => { cancelled = true; };
+  }, []);
+
+  // Watch user location continuously — updates position only, doesn't override pickup
   useEffect(() => {
     if (!navigator.geolocation) {
       toast.error("Geolocation is not supported by your browser");
+      setLocating(false);
       return;
     }
     const watchId = navigator.geolocation.watchPosition(
-      async (pos) => {
+      (pos) => {
         const pt = { lat: pos.coords.latitude, lng: pos.coords.longitude };
         setUserLocation(pt);
-        setPickup((prev) => {
-          if (!prev) {
-            setCenter(pt);
-            reverseGeocode(pt.lat, pt.lng).then((addr) => {
-              setPickup({ pt, address: addr });
+        // Only auto-set pickup if never set before
+        if (!pickupSetByGps.current) {
+          pickupSetByGps.current = true;
+          setCenter(pt);
+          setLocating(false);
+          reverseGeocode(pt.lat, pt.lng).then((addr) => {
+            setPickup((prev) => {
+              if (!prev) return { pt, address: addr };
+              return prev;
             });
-          }
-          return prev;
-        });
+          });
+        }
       },
       (err) => {
         if (err.code === err.PERMISSION_DENIED) {
@@ -96,10 +131,41 @@ export default function CustomerHome() {
         } else {
           console.warn("Geolocation watch error:", err.message);
         }
+        setLocating(false);
       },
       { enableHighAccuracy: true, maximumAge: 2000, timeout: 8000 }
     );
     return () => navigator.geolocation.clearWatch(watchId);
+  }, []);
+
+  // "Use Current Location" handler
+  const useCurrentLocation = useCallback(async () => {
+    const loc = userLocationRef.current;
+    if (loc) {
+      setCenter(loc);
+      const addr = await reverseGeocode(loc.lat, loc.lng);
+      setPickup({ pt: loc, address: addr });
+      toast.success("Pickup set to your current location");
+    } else {
+      try {
+        const pt = await getCurrentLocationAsync(5000);
+        setUserLocation(pt);
+        setCenter(pt);
+        const addr = await reverseGeocode(pt.lat, pt.lng);
+        setPickup({ pt, address: addr });
+        toast.success("Pickup set to your current location");
+      } catch {
+        toast.error("Could not get your location. Check GPS settings.");
+      }
+    }
+  }, []);
+
+  // Map "Locate Me" handler
+  const onLocateMe = useCallback(() => {
+    const loc = userLocationRef.current;
+    if (loc) {
+      setCenter(loc);
+    }
   }, []);
 
   // Fetch route and distance/duration
@@ -132,7 +198,7 @@ export default function CustomerHome() {
     };
   }, [pickup, drop]);
 
-  // Fetch nearby captains — poll every 5s (was 8s)
+  // Fetch nearby captains — poll every 3s (reduced from 5s)
   useEffect(() => {
     if (!pickup) return;
     let cancelled = false;
@@ -149,13 +215,19 @@ export default function CustomerHome() {
         .map((c) => ({ lat: Number(c.current_lat), lng: Number(c.current_lng) }));
       setNearbyCaptains(pts);
     }
-    load();
-    const id = window.setInterval(load, 5000);
+    load(); // Immediate fetch on change
+    const id = window.setInterval(load, 3000); // Reduced from 5s to 3s
     return () => {
       cancelled = true;
       window.clearInterval(id);
     };
   }, [pickup, vehicle]);
+
+  // Memoize nearby captains to prevent marker flicker
+  const memoizedNearbyCaptains = useMemo(
+    () => nearbyCaptains.map((pt) => ({ ...pt, vehicle_type: vehicle })),
+    [nearbyCaptains.map((p) => `${p.lat.toFixed(4)},${p.lng.toFixed(4)}`).join("|"), vehicle]
+  );
 
   useEffect(() => {
     if (!user) return;
@@ -301,8 +373,8 @@ export default function CustomerHome() {
     }
 
     const now = Date.now();
-    // Fetch OSRM duration at most once every 10 seconds (was 15s)
-    if (now - lastFetchedTime.current < 10000) return;
+    // Fetch OSRM duration at most once every 8 seconds (reduced from 10s)
+    if (now - lastFetchedTime.current < 8000) return;
 
     let cancelled = false;
     (async () => {
@@ -329,6 +401,11 @@ export default function CustomerHome() {
 
   async function bookRide() {
     if (!user || !pickup || !drop || distanceKm === 0) return;
+    // Validate addresses have valid coordinates
+    if (!pickup.pt.lat || !pickup.pt.lng || !drop.pt.lat || !drop.pt.lng) {
+      toast.error("Invalid pickup or drop location. Please select from search results.");
+      return;
+    }
     if (rideType === "parcel" && !isParcelValid(parcel)) {
       toast.error("Please fill all parcel details (10-digit phone numbers)");
       return;
@@ -434,9 +511,21 @@ export default function CustomerHome() {
   }
 
   return (
-    <div className="flex flex-col h-screen">
+    <div className="flex flex-col" style={{ height: "100dvh" }}>
       <AppHeader />
       <div className="relative flex-1">
+        {/* Locating overlay */}
+        {locating && (
+          <div className="absolute inset-0 z-20 flex items-center justify-center bg-background/80 backdrop-blur-sm">
+            <div className="flex flex-col items-center gap-3">
+              <div className="relative">
+                <Crosshair className="h-8 w-8 text-primary animate-pulse" />
+              </div>
+              <div className="text-sm font-semibold">Locating you...</div>
+              <div className="text-xs text-muted-foreground">உங்கள் இருப்பிடம் கண்டறியப்படுகிறது</div>
+            </div>
+          </div>
+        )}
         <MapView
           center={pickup?.pt ?? center}
           pickup={pickup?.pt}
@@ -446,11 +535,12 @@ export default function CustomerHome() {
               ? [{ ...captainLive, vehicle_type: activeRide.vehicle_type }]
               : activeRide
               ? []
-              : nearbyCaptains.map((pt) => ({ ...pt, vehicle_type: vehicle }))
+              : memoizedNearbyCaptains
           }
           route={route}
           captainRoute={captainRoute}
           userLocation={userLocation}
+          onLocateMe={onLocateMe}
         />
 
         <div className="absolute bottom-0 left-0 right-0 md:top-3 md:bottom-3 md:right-auto md:w-[420px] z-10 p-3 pointer-events-none">
@@ -477,6 +567,7 @@ export default function CustomerHome() {
                 onBook={bookRide}
                 durationSec={durationSec}
                 calculatingRoute={calculatingRoute}
+                onUseCurrentLocation={useCurrentLocation}
               />
             ) : (
               <ActiveRidePanel
@@ -532,6 +623,7 @@ function BookingPanel({
   onBook,
   durationSec,
   calculatingRoute,
+  onUseCurrentLocation,
 }: {
   pickup: { pt: Pt; address: string } | null;
   drop: { pt: Pt; address: string } | null;
@@ -551,6 +643,7 @@ function BookingPanel({
   onBook: () => void;
   durationSec: number;
   calculatingRoute: boolean;
+  onUseCurrentLocation: () => void;
 }) {
   return (
     <div className="space-y-3">
@@ -577,18 +670,31 @@ function BookingPanel({
       </div>
 
       <div className="space-y-2">
-        <PlaceSearch
-          placeholder={rideType === "parcel" ? "Pickup parcel from" : "Pickup location · ஏறும் இடம்"}
-          value={pickup?.address ?? ""}
-          onSelect={onPickup}
-          iconColor="hsl(48 100% 50%)"
-        />
-        <PlaceSearch
-          placeholder={rideType === "parcel" ? "Deliver parcel to" : "Drop location · இறங்கும் இடம்"}
-          value={drop?.address ?? ""}
-          onSelect={onDrop}
-          iconColor="hsl(0 0% 8%)"
-        />
+        <div className="relative">
+          <PlaceSearch
+            placeholder={rideType === "parcel" ? "Pickup parcel from" : "Pickup location · ஏறும் இடம்"}
+            value={pickup?.address ?? ""}
+            onSelect={onPickup}
+            iconColor="hsl(48 100% 50%)"
+          />
+          {/* Use Current Location button */}
+          <button
+            type="button"
+            onClick={onUseCurrentLocation}
+            className="absolute right-1 -bottom-5 text-[10px] text-primary hover:text-primary/80 font-semibold flex items-center gap-0.5 transition-colors z-10"
+          >
+            <Crosshair className="h-3 w-3" />
+            Use current location
+          </button>
+        </div>
+        <div className="mt-3">
+          <PlaceSearch
+            placeholder={rideType === "parcel" ? "Deliver parcel to" : "Drop location · இறங்கும் இடம்"}
+            value={drop?.address ?? ""}
+            onSelect={onDrop}
+            iconColor="hsl(0 0% 8%)"
+          />
+        </div>
       </div>
 
       <FavoriteLocations currentPickup={pickup} onSelect={onSelectFavorite} />
