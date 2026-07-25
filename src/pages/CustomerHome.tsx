@@ -4,6 +4,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { MapView } from "@/components/MapView";
 import { PlaceSearch } from "@/components/PlaceSearch";
 import { AppHeader } from "@/components/AppHeader";
+import { SEO } from "@/components/SEO";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { calcFare, FARE_CONFIG, haversineKm, MATCH_RADIUS_KM, VehicleType } from "@/lib/fare";
@@ -512,6 +513,7 @@ export default function CustomerHome() {
 
   return (
     <div className="flex flex-col" style={{ height: "100dvh" }}>
+      <SEO title="Book a Ride | Kallai Ride" />
       <AppHeader />
       <div className="relative flex-1">
         {/* Locating overlay */}

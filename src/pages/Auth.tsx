@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card } from "@/components/ui/card";
 import { Logo } from "@/components/Logo";
+import { SEO } from "@/components/SEO";
 import { toast } from "sonner";
 import { Bike, User, Shield, Eye, EyeOff } from "lucide-react";
 
@@ -160,6 +161,7 @@ export default function Auth() {
 
   return (
     <div className="min-h-screen flex flex-col bg-gradient-to-br from-primary/20 via-background to-background">
+      <SEO title={mode === "signin" ? "Sign In | Kallai Ride" : mode === "signup" ? "Create Account | Kallai Ride" : "Kallai Ride"} />
       <header className="p-4">
         <Logo size="md" />
       </header>

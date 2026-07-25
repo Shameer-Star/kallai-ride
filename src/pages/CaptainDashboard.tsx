@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { AppHeader } from "@/components/AppHeader";
+import { SEO } from "@/components/SEO";
 import { MapView } from "@/components/MapView";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -566,6 +567,7 @@ export default function CaptainDashboard() {
 
   return (
     <div className="flex flex-col" style={{ height: "100dvh" }}>
+      <SEO title="Captain Dashboard | Kallai Ride" />
       <AppHeader />
       <div className="relative flex-1">
         <MapView

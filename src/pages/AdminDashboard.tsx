@@ -1,13 +1,18 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { Navigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { AppHeader } from "@/components/AppHeader";
+import { SEO } from "@/components/SEO";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer,
+  BarChart, Bar, PieChart, Pie, Cell, Legend
+} from "recharts";
 import {
   IndianRupee,
   Users,
@@ -226,6 +231,41 @@ export default function AdminDashboard() {
     }
   }
 
+  // Chart Data Processing
+  const dailyData = useMemo(() => {
+    const map = new Map<string, { date: string; rides: number; revenue: number }>();
+    [...rides].reverse().forEach(r => { // Reverse to make it chronological (oldest to newest)
+      if (!r.created_at) return;
+      const d = new Date(r.created_at).toLocaleDateString("en-IN", { month: "short", day: "numeric" });
+      if (!map.has(d)) map.set(d, { date: d, rides: 0, revenue: 0 });
+      const entry = map.get(d)!;
+      entry.rides += 1;
+      if (r.status === "completed") entry.revenue += Number(r.fare ?? 0);
+    });
+    return Array.from(map.values());
+  }, [rides]);
+
+  const statusData = useMemo(() => {
+    const counts = { completed: 0, cancelled: 0, requested: 0, accepted: 0, started: 0 };
+    rides.forEach(r => {
+      const s = r.status as keyof typeof counts;
+      if (counts[s] !== undefined) counts[s]++;
+    });
+    return Object.entries(counts).filter(([_, v]) => v > 0).map(([k, v]) => ({ name: k.charAt(0).toUpperCase() + k.slice(1), value: v }));
+  }, [rides]);
+
+  const vehicleData = useMemo(() => {
+    const counts = { bike: 0, auto: 0, parcel: 0 };
+    rides.forEach(r => {
+      if (r.ride_type === "parcel") counts.parcel++;
+      else if (r.vehicle_type === "bike") counts.bike++;
+      else if (r.vehicle_type === "auto") counts.auto++;
+    });
+    return Object.entries(counts).filter(([_, v]) => v > 0).map(([k, v]) => ({ name: k.charAt(0).toUpperCase() + k.slice(1), value: v }));
+  }, [rides]);
+
+  const COLORS = ['#FFCC00', '#34A853', '#EA4335', '#4285F4', '#FBBC05'];
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -238,6 +278,7 @@ export default function AdminDashboard() {
 
   return (
     <div className="flex flex-col min-h-screen">
+      <SEO title="Admin Dashboard | Kallai Ride" />
       <AppHeader />
       <main className="flex-1 p-4 max-w-6xl mx-auto w-full space-y-4">
         <div>
@@ -254,14 +295,108 @@ export default function AdminDashboard() {
           <KpiCard icon={Star} label="Completion %" value={`${stats.completionRate}%`} color="bg-yellow-100 dark:bg-yellow-950/30" />
         </div>
 
-        <Tabs defaultValue="captains" className="w-full">
-          <TabsList className="grid grid-cols-3 w-full h-11">
+        <Tabs defaultValue="analytics" className="w-full">
+          <TabsList className="grid grid-cols-4 w-full h-11">
+            <TabsTrigger value="analytics">Analytics</TabsTrigger>
             <TabsTrigger value="captains">Captains ({captains.length})</TabsTrigger>
             <TabsTrigger value="rides">Rides ({rides.length})</TabsTrigger>
-            <TabsTrigger value="cancellations" className="flex items-center gap-1">
-              <Clock className="h-3.5 w-3.5 shrink-0" /> Cancels ({cancellations.length})
+            <TabsTrigger value="cancellations" className="flex items-center justify-center gap-1">
+              <Clock className="h-3.5 w-3.5 shrink-0" /> Cancels
             </TabsTrigger>
           </TabsList>
+
+          <TabsContent value="analytics" className="space-y-4 mt-3 animate-in fade-in">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Revenue Area Chart */}
+              <Card className="p-4 shadow-sm border-2">
+                <h3 className="font-bold mb-4">Revenue Over Time</h3>
+                <div className="h-64">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart data={dailyData}>
+                      <defs>
+                        <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#FFCC00" stopOpacity={0.8}/>
+                          <stop offset="95%" stopColor="#FFCC00" stopOpacity={0}/>
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#eee" />
+                      <XAxis dataKey="date" tick={{fontSize: 12}} />
+                      <YAxis tick={{fontSize: 12}} width={40} />
+                      <RechartsTooltip formatter={(value: number) => [`₹${value}`, "Revenue"]} />
+                      <Area type="monotone" dataKey="revenue" stroke="#FFCC00" strokeWidth={3} fillOpacity={1} fill="url(#colorRevenue)" />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                </div>
+              </Card>
+
+              {/* Rides Bar Chart */}
+              <Card className="p-4 shadow-sm border-2">
+                <h3 className="font-bold mb-4">Daily Ride Volume</h3>
+                <div className="h-64">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={dailyData}>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#eee" />
+                      <XAxis dataKey="date" tick={{fontSize: 12}} />
+                      <YAxis tick={{fontSize: 12}} width={40} />
+                      <RechartsTooltip />
+                      <Bar dataKey="rides" fill="#111827" radius={[4, 4, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </Card>
+
+              {/* Status Pie Chart */}
+              <Card className="p-4 shadow-sm border-2">
+                <h3 className="font-bold mb-4">Ride Status Distribution</h3>
+                <div className="h-64">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={statusData}
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={60}
+                        outerRadius={80}
+                        paddingAngle={5}
+                        dataKey="value"
+                      >
+                        {statusData.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                        ))}
+                      </Pie>
+                      <RechartsTooltip />
+                      <Legend />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+              </Card>
+
+              {/* Vehicle Pie Chart */}
+              <Card className="p-4 shadow-sm border-2">
+                <h3 className="font-bold mb-4">Vehicle & Service Type</h3>
+                <div className="h-64">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={vehicleData}
+                        cx="50%"
+                        cy="50%"
+                        outerRadius={80}
+                        paddingAngle={2}
+                        dataKey="value"
+                      >
+                        {vehicleData.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={COLORS[(index + 2) % COLORS.length]} />
+                        ))}
+                      </Pie>
+                      <RechartsTooltip />
+                      <Legend />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+              </Card>
+            </div>
+          </TabsContent>
 
           <TabsContent value="captains" className="space-y-2 mt-3 animate-in fade-in">
             <div className="relative mb-2">
