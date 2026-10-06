@@ -35,6 +35,7 @@ type Ride = {
   vehicle_type: VehicleType;
   ride_type: RideType;
   otp: string | null;
+  payment_status: "pending" | "processing" | "success" | "failed";
 };
 
 const DEFAULT_CENTER: Pt = { lat: 11.7880009, lng: 79.1562643 };
@@ -71,6 +72,7 @@ export default function CustomerHome() {
   const [locating, setLocating] = useState(true); // New: show "Locating you..." overlay
   const lastFetchedTime = useRef<number>(0);
   const lastRideRef = useRef<{ id: string; status: string } | null>(null);
+  const dismissedRideIdRef = useRef<string | null>(null);
   const pickupSetByGps = useRef(false); // Track if GPS already set the initial pickup
   const userLocationRef = useRef<Pt | null>(null);
   userLocationRef.current = userLocation;
@@ -234,18 +236,22 @@ export default function CustomerHome() {
     if (!user) return;
     let cancelled = false;
     const RIDE_COLS =
-      "id, status, captain_id, pickup_address, pickup_lat, pickup_lng, drop_address, drop_lat, drop_lng, fare, distance_km, vehicle_type, ride_type, created_at";
+      "id, status, captain_id, pickup_address, pickup_lat, pickup_lng, drop_address, drop_lat, drop_lng, fare, distance_km, vehicle_type, ride_type, payment_status, created_at";
     async function load() {
       const { data } = await supabase
         .from("rides")
         .select(RIDE_COLS)
         .eq("customer_id", user!.id)
-        .in("status", ["requested", "accepted", "started"])
+        .in("status", ["requested", "accepted", "started", "completed"])
         .order("created_at", { ascending: false })
         .limit(1)
         .maybeSingle();
       if (cancelled) return;
       let next = (data as unknown as Ride) ?? null;
+
+      if (next && next.status === "completed" && next.id === dismissedRideIdRef.current) {
+        next = null;
+      }
 
       // Auto cancel if requested more than 20 minutes ago and no captain accepted
       if (next && next.status === "requested" && (next as any).created_at) {
@@ -570,6 +576,15 @@ export default function CustomerHome() {
                 durationSec={durationSec}
                 calculatingRoute={calculatingRoute}
                 onUseCurrentLocation={useCurrentLocation}
+              />
+            ) : activeRide.status === "completed" ? (
+              <ReceiptPanel
+                ride={activeRide}
+                onDismiss={() => {
+                  dismissedRideIdRef.current = activeRide.id;
+                  setActiveRide(null);
+                  setRateRide(activeRide);
+                }}
               />
             ) : (
               <ActiveRidePanel
@@ -951,6 +966,40 @@ function ActiveRidePanel({
           <X className="h-4 w-4 mr-1" /> {status === "accepted" || status === "started" ? "Cancel Driver · கேப்டனை ரத்து செய்" : "Cancel Ride · ரத்து செய்"}
         </Button>
       )}
+    </div>
+  );
+}
+
+export function ReceiptPanel({ ride, onDismiss }: { ride: Ride; onDismiss: () => void }) {
+  return (
+    <div className='space-y-4 text-center p-2'>
+      <CheckCircle2 className='h-12 w-12 text-success mx-auto mb-2' />
+      <h2 className='text-2xl font-bold'>Ride Completed</h2>
+      <div className='text-4xl font-extrabold text-primary py-2'>₹{ride.fare}</div>
+      <div className='bg-muted rounded-xl p-3 text-sm'>
+        <div className='flex justify-between py-1'>
+          <span className='text-muted-foreground'>Status</span>
+          <span className={ride.payment_status === 'success' ? 'text-success font-bold' : 'text-orange-500 font-bold'}>
+            {ride.payment_status === 'success' ? 'Paid' : 'Payment Pending'}
+          </span>
+        </div>
+        <div className='flex justify-between py-1 border-t'>
+          <span className='text-muted-foreground'>Distance</span>
+          <span className='font-medium'>{ride.distance_km} km</span>
+        </div>
+      </div>
+      <p className='text-xs text-muted-foreground'>
+        {ride.payment_status === 'success' 
+          ? 'Your payment was received successfully.' 
+          : 'Please pay the captain via cash or UPI. Once verified, this screen will update.'}
+      </p>
+      <Button 
+        onClick={onDismiss} 
+        disabled={ride.payment_status !== 'success'}
+        className='w-full h-12 font-bold'
+      >
+        {ride.payment_status === 'success' ? 'Done' : 'Waiting for payment...'}
+      </Button>
     </div>
   );
 }

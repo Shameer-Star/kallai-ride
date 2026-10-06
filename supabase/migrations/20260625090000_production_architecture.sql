@@ -1,4 +1,4 @@
--- Migration: Complete Supabase Production Architecture for Kallai Ride
+-- Migration: Complete Supabase Production Architecture for TN Ride
 
 -- ========================================================
 -- 1. Create users table and trigger sync with profiles
@@ -49,7 +49,7 @@ begin
   values (new.id, _full_name, _phone);
 
   _requested := new.raw_user_meta_data->>'role';
-  if new.email = 'kallairideadmin@kallai.ride' then
+  if new.email = 'TNRideadmin@tn.ride' then
     _role := 'admin'::app_role;
   elsif _requested = 'captain' then
     _role := 'captain'::app_role;

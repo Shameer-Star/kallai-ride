@@ -106,7 +106,7 @@ export default function Auth() {
     e.preventDefault();
     const username = adminUser.trim().toLowerCase();
     const passwordToCheck = adminPass.trim();
-    if (username !== "adhaiyurrideadmin" && username !== "kallairideadmin") {
+    if (username !== "adhaiyurrideadmin" && username !== "TNRideadmin") {
       toast.error("Invalid admin username");
       return;
     }
@@ -130,8 +130,8 @@ export default function Auth() {
 
       // Now sign in normally, checking both emails to prevent lockouts
       let emailToUse = "admin@adhaiyur.ride";
-      if (username === "kallairideadmin") {
-        emailToUse = "kallairideadmin@kallai.ride";
+      if (username === "TNRideadmin") {
+        emailToUse = "TNRideadmin@tn.ride";
       }
 
       let { error: signInErr } = await supabase.auth.signInWithPassword({
@@ -142,7 +142,7 @@ export default function Auth() {
       if (signInErr && emailToUse === "admin@adhaiyur.ride") {
         // Fallback to old admin email if the Supabase instance hasn't updated its default boot admin
         const fallback = await supabase.auth.signInWithPassword({
-          email: "kallairideadmin@kallai.ride",
+          email: "TNRideadmin@tn.ride",
           password: passwordToCheck,
         });
         signInErr = fallback.error;
@@ -161,7 +161,7 @@ export default function Auth() {
 
   return (
     <div className="min-h-screen flex flex-col bg-gradient-to-br from-primary/20 via-background to-background">
-      <SEO title={mode === "signin" ? "Sign In | Kallai Ride" : mode === "signup" ? "Create Account | Kallai Ride" : "Kallai Ride"} />
+      <SEO title={mode === "signin" ? "Sign In | TN Ride" : mode === "signup" ? "Create Account | TN Ride" : "TN Ride"} />
       <header className="p-4">
         <Logo size="md" />
       </header>
@@ -176,10 +176,10 @@ export default function Auth() {
           </h1>
           <p className="text-sm text-muted-foreground mb-6">
             {mode === "signin"
-              ? "Welcome back to Kallai Ride"
+              ? "Welcome back to TN Ride"
               : mode === "forgot"
-              ? "Reset your Kallai Ride password"
-              : "Create your Kallai Ride account"}
+              ? "Reset your TN Ride password"
+              : "Create your TN Ride account"}
           </p>
 
           {mode !== "forgot" ? (

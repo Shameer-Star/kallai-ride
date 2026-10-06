@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { CheckCircle2, QrCode, IndianRupee, Copy } from "lucide-react";
 import QRCode from "qrcode";
 import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
 
 interface PaymentQRDialogProps {
   open: boolean;
@@ -24,8 +25,9 @@ export function PaymentQRDialog({
 }: PaymentQRDialogProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [generated, setGenerated] = useState(false);
+  const [verifying, setVerifying] = useState(false);
 
-  const upiLink = `upi://pay?pa=${encodeURIComponent(captainUpiId)}&pn=${encodeURIComponent(captainName)}&am=${fare}&cu=INR&tn=KallaiRide-${rideId.slice(0, 8)}`;
+  const upiLink = `upi://pay?pa=${encodeURIComponent(captainUpiId)}&pn=${encodeURIComponent(captainName)}&am=${fare}&cu=INR&tn=TNRide-${rideId.slice(0, 8)}`;
 
   useEffect(() => {
     if (!open || !canvasRef.current || !captainUpiId) return;
@@ -53,6 +55,27 @@ export function PaymentQRDialog({
     });
   }
 
+  async function verifyPayment(method: string) {
+    setVerifying(true);
+    try {
+      const { data, error } = await supabase.rpc("verify_ride_payment", {
+        _ride_id: rideId,
+        _method: method
+      });
+      if (error) throw error;
+      if (data) {
+        toast.success("Payment verified successfully!");
+        onOpenChange(false);
+      } else {
+        toast.error("Could not verify payment. Please try again.");
+      }
+    } catch (err: any) {
+      toast.error(err.message || "Payment verification failed");
+    } finally {
+      setVerifying(false);
+    }
+  }
+
   if (!captainUpiId) {
     return (
       <Dialog open={open} onOpenChange={onOpenChange}>
@@ -66,8 +89,9 @@ export function PaymentQRDialog({
             <p className="text-sm text-muted-foreground">
               Captain hasn't set their UPI ID. Please pay cash directly.
             </p>
-            <Button onClick={() => onOpenChange(false)} className="w-full h-11 font-bold">
-              <CheckCircle2 className="h-4 w-4 mr-1" /> Done
+            <Button onClick={() => verifyPayment('cash')} disabled={verifying} className="w-full h-11 font-bold">
+              {verifying ? <div className="animate-spin h-4 w-4 border-2 border-primary-foreground border-t-transparent rounded-full mr-2" /> : <CheckCircle2 className="h-4 w-4 mr-1" />}
+              {verifying ? "Verifying..." : "Mark as Paid (Cash)"}
             </Button>
           </div>
         </DialogContent>
@@ -124,10 +148,12 @@ export function PaymentQRDialog({
 
           <Button
             variant="outline"
-            onClick={() => onOpenChange(false)}
+            onClick={() => verifyPayment('upi')}
+            disabled={verifying}
             className="w-full"
           >
-            <CheckCircle2 className="h-4 w-4 mr-1" /> I've Paid / Pay Cash
+            {verifying ? <div className="animate-spin h-4 w-4 border-2 border-primary border-t-transparent rounded-full mr-2" /> : <CheckCircle2 className="h-4 w-4 mr-1" />}
+            {verifying ? "Verifying..." : "I've Paid / Pay Cash"}
           </Button>
         </div>
       </DialogContent>

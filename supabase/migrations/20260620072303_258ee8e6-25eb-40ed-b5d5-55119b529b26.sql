@@ -1,4 +1,4 @@
--- Bootstrap admin role for the dedicated kallairideadmin account
+-- Bootstrap admin role for the dedicated TNRideadmin account
 CREATE OR REPLACE FUNCTION public.bootstrap_admin(_passcode text)
 RETURNS boolean
 LANGUAGE plpgsql
@@ -13,7 +13,7 @@ BEGIN
     RETURN false;
   END IF;
   SELECT email INTO _email FROM auth.users WHERE id = _uid;
-  IF _email <> 'kallairideadmin@kallai.ride' THEN
+  IF _email <> 'TNRideadmin@tn.ride' THEN
     RETURN false;
   END IF;
   IF _passcode <> 'ride123' THEN

@@ -10,7 +10,7 @@ type Captain = {
   vehicle_number: string | null;
   vehicle_type: string;
   rating: number;
-  total_rides: number;
+  completed_rides: number;
   photo_url: string | null;
   phone: string | null;
 };
@@ -24,7 +24,7 @@ export function DriverCard({ captainId }: { captainId: string }) {
     async function load() {
       const { data } = await supabase
         .from("captains")
-        .select("id, full_name, vehicle_number, vehicle_type, rating, total_rides, photo_url, phone")
+        .select("id, full_name, vehicle_number, vehicle_type, rating, completed_rides, photo_url, phone")
         .eq("id", captainId)
         .maybeSingle();
       if (cancelled) return;
@@ -84,7 +84,7 @@ export function DriverCard({ captainId }: { captainId: string }) {
         <div className="flex items-center gap-1 text-xs">
           <Star className="h-3 w-3 fill-current text-yellow-500" />
           <span className="font-semibold">{Number(c.rating).toFixed(1)}</span>
-          <span className="text-muted-foreground">· {c.total_rides} rides</span>
+          <span className="text-muted-foreground">· {c.completed_rides} rides</span>
         </div>
       </div>
       {c.phone && (

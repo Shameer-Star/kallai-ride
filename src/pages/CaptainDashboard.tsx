@@ -77,6 +77,7 @@ type Ride = {
   receiver_name: string | null;
   receiver_phone: string | null;
   item_description: string | null;
+  payment_status?: "pending" | "processing" | "success" | "failed";
 };
 
 const DEFAULT_CENTER: Pt = { lat: 11.7880009, lng: 79.1562643 };
@@ -250,7 +251,7 @@ export default function CaptainDashboard() {
       const { data } = await supabase
         .from("rides")
         .select(
-          "id, customer_id, captain_id, status, pickup_address, pickup_lat, pickup_lng, drop_address, drop_lat, drop_lng, vehicle_type, ride_type, fare, distance_km, rejected_by, sender_name, receiver_name, item_description"
+          "id, customer_id, captain_id, status, pickup_address, pickup_lat, pickup_lng, drop_address, drop_lat, drop_lng, vehicle_type, ride_type, fare, distance_km, rejected_by, sender_name, receiver_name, item_description, payment_status"
         )
         .eq("captain_id", user!.id)
         .in("status", ["accepted", "started"])
@@ -306,7 +307,7 @@ export default function CaptainDashboard() {
           ride: r as Ride,
           dist: haversineKm(myPt, { lat: r.pickup_lat, lng: r.pickup_lng }),
         }))
-        .filter((r) => r.dist <= MATCH_RADIUS_KM) // Only within 5km radius
+        .filter((r) => r.dist <= MATCH_RADIUS_KM)
         .sort((a, b) => a.dist - b.dist);
       setPendingRequest(candidates[0]?.ride ?? null);
     }
@@ -342,10 +343,20 @@ export default function CaptainDashboard() {
 
     const channel = supabase
       .channel(`captain-feed-${user.id}`)
-      .on("postgres_changes", { event: "*", schema: "public", table: "rides" }, () => {
+      .on("postgres_changes", { event: "*", schema: "public", table: "rides" }, (payload: any) => {
         loadActive();
         loadPending();
         loadEarnings();
+        if (payload.new && payload.new.payment_status === 'success') {
+          setCompletedRideForQR((prev) => {
+            if (prev && prev.id === payload.new.id) {
+              toast.success("Payment received successfully!");
+              setShowPaymentQR(false);
+              return null;
+            }
+            return prev;
+          });
+        }
       })
       .on(
         "postgres_changes",
@@ -567,7 +578,7 @@ export default function CaptainDashboard() {
 
   return (
     <div className="flex flex-col" style={{ height: "100dvh" }}>
-      <SEO title="Captain Dashboard | Kallai Ride" />
+      <SEO title="Captain Dashboard | TN Ride" />
       <AppHeader />
       <div className="relative flex-1">
         <MapView

@@ -100,7 +100,7 @@ export const LOCAL_PLACES: GeoPlace[] = [
     display_name: "Kallakurichi, Tamil Nadu, India",
     lat: 11.7383,
     lng: 78.9639,
-    keywords: ["kallakurichi", "kallai", "kallakurchi", "kallakuruchi", "கள்ளக்குறிச்சி"]
+    keywords: ["kallakurichi", "TN", "kallakurchi", "kallakuruchi", "கள்ளக்குறிச்சி"]
   },
   {
     display_name: "Elavanasur Kottai, Kallakurichi, Tamil Nadu, India",

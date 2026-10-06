@@ -54,7 +54,17 @@ export default function AdminDashboard() {
     const channel = supabase
       .channel("admin-feed")
       .on("postgres_changes", { event: "*", schema: "public", table: "rides" }, refresh)
-      .on("postgres_changes", { event: "*", schema: "public", table: "captains" }, refresh)
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "captains" }, refresh)
+      .on("postgres_changes", { event: "DELETE", schema: "public", table: "captains" }, refresh)
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "captains" }, (payload) => {
+        setCaptains((prev) => {
+          const idx = prev.findIndex((c) => c.id === payload.new.id);
+          if (idx === -1) { refresh(); return prev; } // fallback if not found
+          const next = [...prev];
+          next[idx] = { ...next[idx], ...payload.new };
+          return next;
+        });
+      })
       .on("postgres_changes", { event: "*", schema: "public", table: "emergency_alerts" as any }, refresh)
       .on("postgres_changes", { event: "*", schema: "public", table: "support_tickets" as any }, refresh)
       .on("postgres_changes", { event: "*", schema: "public", table: "cancellations" }, refresh)
@@ -278,7 +288,7 @@ export default function AdminDashboard() {
 
   return (
     <div className="flex flex-col min-h-screen">
-      <SEO title="Admin Dashboard | Kallai Ride" />
+      <SEO title="Admin Dashboard | TN Ride" />
       <AppHeader />
       <main className="flex-1 p-4 max-w-6xl mx-auto w-full space-y-4">
         <div>

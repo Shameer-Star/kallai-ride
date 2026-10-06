@@ -1,6 +1,6 @@
 
 -- =====================================================
--- KALLAI RIDE — comprehensive security hardening
+-- TN Ride — comprehensive security hardening
 -- =====================================================
 
 -- 1) handle_new_user: never trust client-supplied 'admin' role (already hardcoded, re-assert)

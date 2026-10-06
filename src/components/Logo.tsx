@@ -9,7 +9,7 @@ export function Logo({ size = "md" }: { size?: "sm" | "md" | "lg" }) {
         <span className="text-white text-base font-black tracking-tighter animate-bounce select-none">K</span>
       </div>
       <span className={`font-black tracking-tight ${textClass} bg-gradient-to-r from-primary to-yellow-500 bg-clip-text text-transparent hover:brightness-110 transition-all duration-300`}>
-        Kallai Ride
+        TN Ride
       </span>
     </div>
   );

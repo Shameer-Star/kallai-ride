@@ -2,9 +2,7 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Adhaiyu Ride — Rapido-inspired yellow/black design system. All HSL. */
-
-@layer base {
+/* TN Ride — Orange/Red design system. All HSL. */@layer base {
   :root {
     --background: 0 0% 100%;
     --foreground: 0 0% 8%;
@@ -15,19 +13,19 @@
     --popover: 0 0% 100%;
     --popover-foreground: 0 0% 8%;
 
-    /* Brand: Rapido yellow */
-    --primary: 48 100% 50%;
-    --primary-foreground: 0 0% 8%;
-    --primary-glow: 50 100% 60%;
+    /* Brand: Orange */
+    --primary: 28 100% 55%;
+    --primary-foreground: 0 0% 100%;
+    --primary-glow: 30 100% 60%;
 
     /* Brand: Black */
     --secondary: 0 0% 8%;
-    --secondary-foreground: 48 100% 50%;
+    --secondary-foreground: 28 100% 55%;
 
     --muted: 0 0% 96%;
     --muted-foreground: 0 0% 40%;
 
-    --accent: 48 100% 50%;
+    --accent: 28 100% 55%;
     --accent-foreground: 0 0% 8%;
 
     --destructive: 0 84% 55%;
@@ -38,23 +36,23 @@
 
     --border: 0 0% 90%;
     --input: 0 0% 90%;
-    --ring: 48 100% 50%;
+    --ring: 28 100% 55%;
 
     --radius: 0.75rem;
 
-    --gradient-primary: linear-gradient(135deg, hsl(48 100% 50%), hsl(45 100% 55%));
+    --gradient-primary: linear-gradient(135deg, hsl(28 100% 55%), hsl(20 100% 50%));
     --gradient-dark: linear-gradient(135deg, hsl(0 0% 8%), hsl(0 0% 18%));
-    --shadow-elegant: 0 10px 30px -10px hsl(48 100% 50% / 0.4);
+    --shadow-elegant: 0 10px 30px -10px hsl(28 100% 55% / 0.4);
     --shadow-soft: 0 4px 16px hsl(0 0% 0% / 0.08);
 
     --sidebar-background: 0 0% 98%;
     --sidebar-foreground: 0 0% 26%;
-    --sidebar-primary: 48 100% 50%;
+    --sidebar-primary: 28 100% 55%;
     --sidebar-primary-foreground: 0 0% 8%;
     --sidebar-accent: 0 0% 96%;
     --sidebar-accent-foreground: 0 0% 8%;
     --sidebar-border: 0 0% 91%;
-    --sidebar-ring: 48 100% 50%;
+    --sidebar-ring: 28 100% 55%;
   }
 
   .dark {
@@ -64,19 +62,19 @@
     --card-foreground: 0 0% 98%;
     --popover: 0 0% 12%;
     --popover-foreground: 0 0% 98%;
-    --primary: 48 100% 55%;
-    --primary-foreground: 0 0% 8%;
+    --primary: 28 100% 60%;
+    --primary-foreground: 0 0% 100%;
     --secondary: 0 0% 18%;
-    --secondary-foreground: 48 100% 55%;
+    --secondary-foreground: 28 100% 60%;
     --muted: 0 0% 18%;
     --muted-foreground: 0 0% 65%;
-    --accent: 48 100% 55%;
+    --accent: 28 100% 60%;
     --accent-foreground: 0 0% 8%;
     --destructive: 0 62% 45%;
     --destructive-foreground: 0 0% 98%;
     --border: 0 0% 22%;
     --input: 0 0% 22%;
-    --ring: 48 100% 55%;
+    --ring: 28 100% 60%;
   }
 }
 
@@ -103,7 +101,7 @@
   background: hsl(var(--background) / 0.8) !important;
 }
 
-/* Adhaiyur Ride Premium Design utilities & Micro-animations */
+/* TN Ride Premium Design utilities & Micro-animations */
 .glass-panel {
   background: rgba(255, 255, 255, 0.75) !important;
   backdrop-filter: blur(16px) saturate(180%);

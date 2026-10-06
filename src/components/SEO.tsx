@@ -10,10 +10,10 @@ interface SEOProps {
 }
 
 export function SEO({
-  title = "Kallai Ride — #1 Bike Taxi & Auto Booking in Kallakurichi",
-  description = "Kallai Ride is Kallakurichi's #1 bike taxi, auto rickshaw booking, and parcel delivery app. Book instant rides starting at ₹10.",
-  keywords = "kallai ride, kallakurichi ride, bike taxi kallakurichi, auto booking kallakurichi",
-  name = "Kallai Ride",
+  title = "TN Ride — #1 Bike Taxi & Auto Booking in Kallakurichi",
+  description = "TN Ride is Kallakurichi's #1 bike taxi, auto rickshaw booking, and parcel delivery app. Book instant rides starting at ₹10.",
+  keywords = "TN Ride, kallakurichi ride, bike taxi kallakurichi, auto booking kallakurichi",
+  name = "TN Ride",
   type = "website",
   url = "https://adhaiyur-ride.vercel.app/",
 }: SEOProps) {
