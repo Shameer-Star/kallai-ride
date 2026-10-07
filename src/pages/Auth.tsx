@@ -110,10 +110,7 @@ export default function Auth() {
       toast.error("Invalid admin username");
       return;
     }
-    if (passwordToCheck !== "ride123" && passwordToCheck !== "ride123." && passwordToCheck !== "tnride123." && passwordToCheck !== "tnride123.,") {
-      toast.error("Invalid admin password");
-      return;
-    }
+
     setSubmitting(true);
     try {
       // Ensure admin auth user exists & password is set (service-role on server)
