@@ -1,4 +1,6 @@
 -- Migration: Fix get_nearby_captains to only return online, verified captains that are not already on an active ride.
+DROP FUNCTION IF EXISTS public.get_nearby_captains(vehicle_type, double precision, double precision, double precision);
+
 CREATE OR REPLACE FUNCTION public.get_nearby_captains(
   _vehicle vehicle_type,
   _lat double precision,
