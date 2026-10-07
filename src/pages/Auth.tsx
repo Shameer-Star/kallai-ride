@@ -128,7 +128,7 @@ export default function Auth() {
       // Now sign in normally, checking both emails to prevent lockouts
       let emailToUse = "admin@adhaiyur.ride";
       if (username === "tnrideadmin") {
-        emailToUse = "TNRideadmin@tn.ride";
+        emailToUse = "tnrideadmin@tnride.in";
       }
 
       let { error: signInErr } = await supabase.auth.signInWithPassword({
