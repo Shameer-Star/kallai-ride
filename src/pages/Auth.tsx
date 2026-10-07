@@ -110,7 +110,7 @@ export default function Auth() {
       toast.error("Invalid admin username");
       return;
     }
-    if (passwordToCheck !== "ride123" && passwordToCheck !== "ride123." && passwordToCheck !== "tnride123.") {
+    if (passwordToCheck !== "ride123" && passwordToCheck !== "ride123." && passwordToCheck !== "tnride123." && passwordToCheck !== "tnride123.,") {
       toast.error("Invalid admin password");
       return;
     }
