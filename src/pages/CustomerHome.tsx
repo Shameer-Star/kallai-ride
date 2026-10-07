@@ -300,9 +300,17 @@ export default function CustomerHome() {
       .channel(`customer-feed-${user.id}`)
       .on(
         "postgres_changes",
-        { event: "*", schema: "public", table: "rides", filter: `customer_id=eq.${user.id}` },
+        { event: "*", schema: "public", table: "rides" },
         (payload: any) => {
-          if (payload.old && payload.new && payload.old.status === "requested" && payload.new.status === "accepted") {
+          const custId = payload.new?.customer_id || payload.old?.customer_id;
+          const rideId = payload.new?.id || payload.old?.id;
+          
+          if (custId !== user.id && rideId !== lastRideRef.current?.id) return;
+
+          const oldStatus = payload.old?.status || (rideId === lastRideRef.current?.id ? lastRideRef.current?.status : null);
+          const newStatus = payload.new?.status;
+
+          if (oldStatus === "requested" && newStatus === "accepted") {
             toast.success("Booking confirmed! Captain is on the way.", { duration: 5000 });
             playNotificationSound();
           }
