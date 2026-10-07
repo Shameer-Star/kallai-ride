@@ -301,7 +301,13 @@ export default function CustomerHome() {
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "rides", filter: `customer_id=eq.${user.id}` },
-        () => load()
+        (payload: any) => {
+          if (payload.old && payload.new && payload.old.status === "requested" && payload.new.status === "accepted") {
+            toast.success("Booking confirmed! Captain is on the way.", { duration: 5000 });
+            playNotificationSound();
+          }
+          load();
+        }
       )
       .on(
         "postgres_changes",
