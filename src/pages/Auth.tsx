@@ -106,11 +106,11 @@ export default function Auth() {
     e.preventDefault();
     const username = adminUser.trim().toLowerCase();
     const passwordToCheck = adminPass.trim();
-    if (username !== "adhaiyurrideadmin" && username !== "TNRideadmin") {
+    if (username !== "adhaiyurrideadmin" && username !== "tnrideadmin") {
       toast.error("Invalid admin username");
       return;
     }
-    if (passwordToCheck !== "ride123" && passwordToCheck !== "ride123.") {
+    if (passwordToCheck !== "ride123" && passwordToCheck !== "ride123." && passwordToCheck !== "tnride123.") {
       toast.error("Invalid admin password");
       return;
     }
@@ -130,7 +130,7 @@ export default function Auth() {
 
       // Now sign in normally, checking both emails to prevent lockouts
       let emailToUse = "admin@adhaiyur.ride";
-      if (username === "TNRideadmin") {
+      if (username === "tnrideadmin") {
         emailToUse = "TNRideadmin@tn.ride";
       }
 
